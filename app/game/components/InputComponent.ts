@@ -1,13 +1,14 @@
+// game/components/InputComponent.ts
 import { Component } from '../../core/Component';
 import { TransformComponent } from './TransformComponent';
 import { PhysicsComponent } from './PhysicsComponent';
 
 export class InputComponent extends Component {
     private keys: { [key: string]: boolean } = {};
+    private jumpPressedLastFrame: boolean = false; // Edge Triggering
 
     constructor() {
         super();
-        // Bind functions to remove event listener
         this.onKeyDown = this.onKeyDown.bind(this);
         this.onKeyUp = this.onKeyUp.bind(this);
         
@@ -17,7 +18,14 @@ export class InputComponent extends Component {
         }
     }
 
-    private onKeyDown(e: KeyboardEvent) { this.keys[e.code] = true; }
+    private onKeyDown(e: KeyboardEvent) { 
+        this.keys[e.code] = true; 
+        
+        // ✨ FIX LỖI CUỘN TRANG (Scroll)
+        if (e.code === 'Space' || e.code === 'ArrowUp' || e.code === 'ArrowDown') {
+            e.preventDefault(); 
+        }
+    }
     private onKeyUp(e: KeyboardEvent) { this.keys[e.code] = false; }
 
     update(delta: number): void {
@@ -33,9 +41,14 @@ export class InputComponent extends Component {
             transform.velocityX = transform.speed;
         }
 
-        if ((this.keys['ArrowUp'] || this.keys['Space']) && physics) {
+        // Xử lý DOUBLE JUMP: Edge Triggering
+        const isJumpKeyHeld = this.keys['ArrowUp'] || this.keys['Space'];
+
+        if (isJumpKeyHeld && !this.jumpPressedLastFrame && physics) {
             physics.jump();
         }
+
+        this.jumpPressedLastFrame = isJumpKeyHeld;
     }
 
     destroy(): void {

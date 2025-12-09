@@ -1,4 +1,3 @@
-// game/GameManager.ts
 import * as PIXI from 'pixi.js';
 import { Entity } from '../core/Entity';
 import { EntityFactory } from './EntityFactory';
@@ -6,29 +5,44 @@ import { EntityFactory } from './EntityFactory';
 export class GameManager {
     private app: PIXI.Application;
     private entities: Entity[] = [];
+    private GAME_HEIGHT: number = 480;
 
     constructor(app: PIXI.Application) {
         this.app = app;
-        this.init();
+        // Bỏ init() trong constructor, ta gọi nó từ bên ngoài (GameCanvas)
     }
 
-    private init() {
-        // Tạo mặt đất
+    // Chuyển init thành async để load tài nguyên
+    public async init() {
+        // 1. Load Assets (Tài nguyên ảnh)
+        // Lưu ý: Đường dẫn bắt đầu từ thư mục public/
+        const textureIdle = await PIXI.Assets.load('/assets/ninja_frog/Idle (32x32).png');
+        const textureRun  = await PIXI.Assets.load('/assets/ninja_frog/Run (32x32).png');
+        const textureJump = await PIXI.Assets.load('/assets/ninja_frog/Jump (32x32).png');
+        const textureFall = await PIXI.Assets.load('/assets/ninja_frog/Fall (32x32).png');
+
+        // Gom lại thành 1 object để truyền cho Factory
+        const playerTextures = {
+            'idle': textureIdle,
+            'run': textureRun,
+            'jump': textureJump,
+            'fall': textureFall
+        };
+
+        // 2. Setup Môi trường
         const ground = new PIXI.Graphics();
-        ground.rect(0, 450, 800, 80); // Cú pháp v8: rect thay vì drawRect
-        ground.fill(0x654321);        // Cú pháp v8: fill thay vì beginFill/endFill
+        const GROUND_Y_START = this.GAME_HEIGHT - 40; 
+        
+        // Vẽ mặt đất 
+        ground.rect(0, GROUND_Y_START, 800, 80);
+        ground.fill(0x654321);
         this.app.stage.addChild(ground);
 
-        // Tạo Player
-        const player = EntityFactory.createPlayer();
+        // 3. Tạo Player với Textures đã load
+        const player = EntityFactory.createPlayer(playerTextures);
         this.addEntity(player);
 
-        // Tạo Enemy
-        const enemy = EntityFactory.createEnemy(500, 100);
-        this.addEntity(enemy);
-
-        // SỬA LỖI TICKER TẠI ĐÂY
-        // Pixi v8 truyền vào 'ticker' object, ta lấy deltaTime từ nó
+        // 4. Start Loop
         this.app.ticker.add((ticker) => {
             this.update(ticker.deltaTime);
         });
@@ -47,6 +61,5 @@ export class GameManager {
 
     public destroy() {
         this.entities.forEach(e => e.destroy());
-        // Không cần stop ticker thủ công vì app.destroy() sẽ lo việc đó
     }
 }

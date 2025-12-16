@@ -5,17 +5,22 @@ import { PhysicsComponent } from './components/PhysicsComponent';
 import { InputComponent } from './components/InputComponent';
 import { AnimatedSpriteComponent, AnimationState } from '../components/AnimatedSpriteComponent';
 import { getFramesFromSpriteSheet } from '../core/Utils';
+import { FruitComponent } from './components/FruitComponent';
+
+interface IGameManager {
+    findEntityById(id: string): Entity | undefined;
+}
+
+const TILE_SIZE = 64;
 
 export class EntityFactory {
     
-    // Hàm này giờ cần nhận Textures đã load sẵn từ GameManager
-    static createPlayer(textures: Record<string, PIXI.Texture>): Entity {
+    static createPlayer(textures: Record<string, PIXI.Texture>, gameManager: IGameManager): Entity {
         const player = new Entity('player');
         player.x = 200;
         player.y = 200; // Đặt cao hơn chút để rơi xuống
 
         // 1. Cắt Texture ra thành các frames
-        // Ninja Frog (32x32): Idle (11 frames), Run (12 frames), Jump (1 frame), Fall (1 frame)
         const animations: Record<AnimationState, PIXI.Texture[]> = {
             idle: getFramesFromSpriteSheet(textures['idle'], 32, 32, 11),
             run:  getFramesFromSpriteSheet(textures['run'], 32, 32, 12),
@@ -25,22 +30,55 @@ export class EntityFactory {
 
         player
             .addComponent(new TransformComponent())
-            .addComponent(new AnimatedSpriteComponent(animations)) // Dùng component mới
-            .addComponent(new PhysicsComponent())
+            .addComponent(new AnimatedSpriteComponent(animations))
+            .addComponent(new PhysicsComponent(gameManager))
             .addComponent(new InputComponent());
 
-        // Phóng to nhân vật lên 2 lần cho dễ nhìn (Pixel art thường nhỏ)
+        // Phóng to nhân vật lên 2 lần
         player.scale.set(2); 
 
         return player;
     }
 
-    // Enemy tạm thời giữ nguyên hoặc nâng cấp tương tự
     static createEnemy(x: number, y: number): Entity {
         const enemy = new Entity('enemy');
         enemy.x = x;
         enemy.y = y;
-        // ... (Logic cũ dùng RenderComponent hình vuông hoặc làm tương tự Player)
         return enemy;
+    }
+
+    // Tạo Tile (Khối gạch)
+    static createTile(texture: PIXI.Texture, x: number, y: number): Entity {
+        const tile = new Entity('tile');
+        tile.x = x;
+        tile.y = y;
+
+        const sprite = PIXI.Sprite.from(texture);
+        sprite.width = TILE_SIZE;
+        sprite.height = TILE_SIZE;
+        sprite.anchor.set(0); 
+        
+        tile.addChild(sprite);
+        tile.addComponent(new TransformComponent());
+        
+        return tile;
+    }
+
+    // Tạo Fruit (Sử dụng logic của Coin)
+    static createFruit(textures: PIXI.Texture[], collectedTextures: PIXI.Texture[], x: number, y: number): Entity {
+        // const fruit = new Entity('coin');
+        const uniqueId = `fruit_${x}_${y}`;
+        const fruit = new Entity(uniqueId);
+        fruit.x = x + TILE_SIZE / 2; // Căn giữa Tile
+        fruit.y = y + TILE_SIZE / 2;
+        
+        const animatedSprite = new PIXI.AnimatedSprite(textures);
+        animatedSprite.anchor.set(0.5); // Neo ở giữa tâm
+        animatedSprite.scale.set(1.5); 
+        
+        fruit.addComponent(new TransformComponent());
+        fruit.addComponent(new FruitComponent(animatedSprite, collectedTextures));
+        
+        return fruit;
     }
 }

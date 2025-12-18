@@ -49,14 +49,18 @@ export class EntityFactory {
 
     // Tạo Tile (Khối gạch)
     static createTile(texture: PIXI.Texture, x: number, y: number): Entity {
-        const tile = new Entity('tile');
-        tile.x = x;
-        tile.y = y;
+        const uniqueId = `tile_${x}_${y}`;
+        const tile = new Entity(uniqueId);
+        tile.x = Math.floor(x);
+        tile.y = Math.floor(y);
 
         const sprite = PIXI.Sprite.from(texture);
         sprite.width = TILE_SIZE;
         sprite.height = TILE_SIZE;
         sprite.anchor.set(0); 
+
+        // Đảm bảo khử răng cưa cho Pixel Art
+        texture.baseTexture.scaleMode = PIXI.SCALE_MODES.NEAREST;
         
         tile.addChild(sprite);
         tile.addComponent(new TransformComponent());
@@ -66,14 +70,13 @@ export class EntityFactory {
 
     // Tạo Fruit (Sử dụng logic của Coin)
     static createFruit(textures: PIXI.Texture[], collectedTextures: PIXI.Texture[], x: number, y: number): Entity {
-        // const fruit = new Entity('coin');
         const uniqueId = `fruit_${x}_${y}`;
         const fruit = new Entity(uniqueId);
-        fruit.x = x + TILE_SIZE / 2; // Căn giữa Tile
+        fruit.x = x + TILE_SIZE / 2;
         fruit.y = y + TILE_SIZE / 2;
         
         const animatedSprite = new PIXI.AnimatedSprite(textures);
-        animatedSprite.anchor.set(0.5); // Neo ở giữa tâm
+        animatedSprite.anchor.set(0.5);
         animatedSprite.scale.set(1.5); 
         
         fruit.addComponent(new TransformComponent());

@@ -8,151 +8,142 @@ interface IGameManager {
     findEntityById(id: string): Entity | undefined;
 }
 
-// Kích thước cố định của Player (32x32, scale 2x = 64x64)
-const PLAYER_HALF_SIZE = 32; 
 const TILE_SIZE = 64;
-const TILE_THRESHOLD = 5;
+// Hitbox thực tế để tính va chạm (nhỏ hơn visual 64x64 để mượt mà hơn)
+const HITBOX_WIDTH = 38;  
+const HITBOX_HEIGHT = 60; 
+const PLAYER_HALF_WIDTH = HITBOX_WIDTH / 2;
+const PLAYER_HALF_HEIGHT = HITBOX_HEIGHT / 2;
 
 export class PhysicsComponent extends Component {
-    private gravity: number = 0.5;
+    private gravity: number = 0.6;
     private maxJumps: number = 2; 
     private jumpsRemaining: number = 2;
     public isGrounded: boolean = false; 
 
-    // Thêm thuộc tính để lưu danh sách các vật thể tĩnh (Tiles)
     public collidableTiles: ICollidable[] = []; 
-    // Thêm thuộc tính để lưu vật thể có thể nhặt (Fruits)
     public collectableItems: ICollidable[] = [];
-
     private gameManager: IGameManager;
+
     constructor(gameManager: IGameManager) {
         super();
         this.gameManager = gameManager;
     }
 
-
     update(delta: number): void {
         const transform = this.entity.requireComponent(TransformComponent);
+        
         // 1. Áp dụng trọng lực
         transform.velocityY += this.gravity * delta;
-        // 2. Cập nhật vị trí X trước
-        this.entity.x += transform.velocityX * delta;
-        this.handleHorizontalCollision(transform);
-        // 3. Cập nhật vị trí Y sau (để xử lý va chạm dọc dễ hơn)
+
+        // 2. Xử lý di chuyển và va chạm theo trục Y (Dọc) trước
         this.entity.y += transform.velocityY * delta;
         this.handleVerticalCollision(transform);
-        // 4. Xử lý va chạm với Fruit
+
+        // 3. Xử lý di chuyển và va chạm theo trục X (Ngang)
+        this.entity.x += transform.velocityX * delta;
+        
+        // Chặn biên trái màn hình
+        if (this.entity.x < PLAYER_HALF_WIDTH) {
+            this.entity.x = PLAYER_HALF_WIDTH;
+            transform.velocityX = 0;
+        }
+        this.handleHorizontalCollision(transform);
+
+        // 4. Xử lý nhặt vật phẩm
         if (this.gameManager) {
             this.handleCollectionCollision();
         }
     }
 
-    private getPlayerBBox(offsetX: number = 0, offsetY: number = 0) {
-         // Tính BBox dựa trên vị trí sau khi di chuyển
+    private getHitbox() {
         return {
-            left: this.entity.x - PLAYER_HALF_SIZE + offsetX,
-            right: this.entity.x + PLAYER_HALF_SIZE + offsetX,
-            top: this.entity.y - PLAYER_HALF_SIZE + offsetY,
-            bottom: this.entity.y + PLAYER_HALF_SIZE + offsetY
+            left: this.entity.x - PLAYER_HALF_WIDTH,
+            right: this.entity.x + PLAYER_HALF_WIDTH,
+            top: this.entity.y - PLAYER_HALF_HEIGHT,
+            bottom: this.entity.y + PLAYER_HALF_HEIGHT
         };
     }
 
-    private handleHorizontalCollision(transform: TransformComponent): void {
-        const playerBBox = this.getPlayerBBox();
-        const dx = transform.velocityX;
+    private handleVerticalCollision(transform: TransformComponent): void {
+        const box = this.getHitbox();
+        let wasOnGround = this.isGrounded;
+        this.isGrounded = false;
 
         for (const tile of this.collidableTiles) {
-            const tileBBox = {
-                left: tile.x,
-                right: tile.x + TILE_SIZE,
-                top: tile.y,
-                bottom: tile.y + TILE_SIZE
-            };
-
-            // Kiểm tra va chạm AABB chung
-            if (playerBBox.right > tileBBox.left &&
-                playerBBox.left < tileBBox.right &&
-                playerBBox.bottom > tileBBox.top + TILE_THRESHOLD && // Bỏ qua nếu nhân vật đang cao hơn Tile nhiều
-                playerBBox.top < tileBBox.bottom) 
-            {
-                // Nếu va chạm từ bên phải Tile (Nhân vật đang đi sang trái)
-                if (dx < 0) {
-                    this.entity.x = tileBBox.right + PLAYER_HALF_SIZE; // Đẩy nhân vật ra khỏi Tile
-                    transform.velocityX = 0; // Chặn di chuyển
-                    break;
+            // Kiểm tra xem nhân vật có nằm trong phạm vi chiều ngang của Tile không
+            // Thêm lề 2px để tránh bị kẹt ở mép
+            if (box.right > tile.x + 2 && box.left < tile.x + TILE_SIZE - 2) {
+                
+                // Va chạm khi đang rơi xuống (Đứng trên sàn)
+                if (transform.velocityY > 0) {
+                    if (box.bottom > tile.y && box.top < tile.y) {
+                        this.entity.y = tile.y - PLAYER_HALF_HEIGHT;
+                        transform.velocityY = 0;
+                        this.isGrounded = true;
+                        this.jumpsRemaining = this.maxJumps;
+                        return; 
+                    }
                 } 
-                // Nếu va chạm từ bên trái Tile (Nhân vật đang đi sang phải)
-                else if (dx > 0) {
-                    this.entity.x = tileBBox.left - PLAYER_HALF_SIZE; // Đẩy nhân vật ra khỏi Tile
-                    transform.velocityX = 0; // Chặn di chuyển
-                    break;
+                // Va chạm khi đang nhảy lên (Đụng trần)
+                else if (transform.velocityY < 0) {
+                    if (box.top < tile.y + TILE_SIZE && box.bottom > tile.y + TILE_SIZE) {
+                        this.entity.y = tile.y + TILE_SIZE + PLAYER_HALF_HEIGHT;
+                        transform.velocityY = 0;
+                        return;
+                    }
                 }
             }
         }
     }
 
-    private handleVerticalCollision(transform: TransformComponent): void {
-        const playerBBox = this.getPlayerBBox();
-        let wasOnGround = this.isGrounded;
-        this.isGrounded = false;
-        
-        for (const tile of this.collidableTiles) {
-            const tileBBox = {
-                left: tile.x,
-                right: tile.x + TILE_SIZE,
-                top: tile.y,
-                bottom: tile.y + TILE_SIZE
-            };
+    private handleHorizontalCollision(transform: TransformComponent): void {
+        const box = this.getHitbox();
 
-            // Kiểm tra va chạm AABB chung
-            if (playerBBox.right > tileBBox.left + TILE_THRESHOLD && // Thêm TILE_THRESHOLD để kiểm tra va chạm
-                playerBBox.left < tileBBox.right - TILE_THRESHOLD && // Chân nhân vật phải nằm trên Tile
-                playerBBox.bottom > tileBBox.top &&
-                playerBBox.top < tileBBox.bottom) 
-            {
-                // Va chạm từ trên xuống (Đứng trên Tile)
-                if (transform.velocityY > 0) { 
-                    this.entity.y = tileBBox.top - PLAYER_HALF_SIZE; 
-                    transform.velocityY = 0; 
-                    
-                    if (!wasOnGround) {
-                        this.jumpsRemaining = this.maxJumps; 
+        for (const tile of this.collidableTiles) {
+            // Kiểm tra phạm vi chiều dọc (Chỉ tính va chạm ngang nếu không phải đang đứng trên đầu tile)
+            if (box.bottom > tile.y + 5 && box.top < tile.y + TILE_SIZE - 5) {
+                
+                // Va chạm tường bên trái (Nhân vật đi sang phải)
+                if (transform.velocityX > 0) {
+                    if (box.right > tile.x && box.left < tile.x) {
+                        this.entity.x = tile.x - PLAYER_HALF_WIDTH;
+                        transform.velocityX = 0;
+                        break;
                     }
-                    this.isGrounded = true; 
-                    return; // Nếu đã tìm thấy mặt đất, thoát
                 }
-                // Va chạm từ dưới lên (Đập đầu vào gạch)
-                else if (transform.velocityY < 0) { 
-                    this.entity.y = tileBBox.bottom + PLAYER_HALF_SIZE; 
-                    transform.velocityY = 0; 
+                // Va chạm tường bên phải (Nhân vật đi sang trái)
+                else if (transform.velocityX < 0) {
+                    if (box.left < tile.x + TILE_SIZE && box.right > tile.x + TILE_SIZE) {
+                        this.entity.x = tile.x + TILE_SIZE + PLAYER_HALF_WIDTH;
+                        transform.velocityX = 0;
+                        break;
+                    }
                 }
             }
         }
     }
 
     private handleCollectionCollision(): void {
-        if (!this.gameManager) return;
-        const playerBBox = this.getPlayerBBox();
-
+        const box = this.getHitbox();
         for (let i = this.collectableItems.length - 1; i >= 0; i--) {
             const item = this.collectableItems[i];
-            // ✨ SỬ DỤNG gameManager ĐÃ ĐƯỢC LƯU
             const itemEntity = this.gameManager.findEntityById(item.id); 
             if (!itemEntity) continue; 
 
-            const itemComponent = itemEntity.getComponent(FruitComponent);
-            if (!itemComponent || itemComponent['isCollecting']) continue;
-            const itemBBox = {
-                left: item.x - item.width / 2, 
+            const itemComp = itemEntity.getComponent(FruitComponent);
+            if (!itemComp || itemComp['isCollecting']) continue;
+
+            const itemBox = {
+                left: item.x - item.width / 2,
                 right: item.x + item.width / 2,
                 top: item.y - item.height / 2,
                 bottom: item.y + item.height / 2
             };
 
-            if (playerBBox.right > itemBBox.left && playerBBox.left < itemBBox.right &&
-                playerBBox.bottom > itemBBox.top && playerBBox.top < itemBBox.bottom) 
-            {
-                itemComponent.collect();
+            if (box.right > itemBox.left && box.left < itemBox.right &&
+                box.bottom > itemBox.top && box.top < itemBox.bottom) {
+                itemComp.collect();
                 this.collectableItems.splice(i, 1);
             }
         }
@@ -160,15 +151,12 @@ export class PhysicsComponent extends Component {
 
     public jump(): boolean {
         const transform = this.entity.requireComponent(TransformComponent);
-
         if (this.jumpsRemaining > 0) {
-            const jumpForce = (this.jumpsRemaining === this.maxJumps) ? 12 : 10;
-            transform.velocityY = -jumpForce;
+            transform.velocityY = -12;
             this.jumpsRemaining--; 
-            
+            this.isGrounded = false;
             return true;
         }
-        
         return false;
     }
 }

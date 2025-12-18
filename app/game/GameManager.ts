@@ -2,30 +2,30 @@ import * as PIXI from 'pixi.js';
 import { Entity } from '../core/Entity';
 import { EntityFactory } from './EntityFactory';
 import { getFramesFromSpriteSheet } from '../core/Utils';
-import { PhysicsComponent } from './components/PhysicsComponent'; // Import mới
+import { PhysicsComponent } from './components/PhysicsComponent';
 import { ICollidable } from '../core/Types';
+import { LevelGenerator } from './LevelGenerator'; // Import LevelGenerator
 
 export class GameManager {
     private app: PIXI.Application;
     private entities: Entity[] = [];
-    private GAME_HEIGHT: number = 480;
+    private player: Entity | null = null;
+    private GAME_WIDTH: number = 800;
 
-    private TILE_SIZE: number = 64;
-    private collidableTiles: ICollidable[] = []; // List Tiles
-    private collectableItems: ICollidable[] = []; // List Fruit
+    // --- Quản lý Map ---
+    private levelGenerator!: LevelGenerator;
+    private lastChunkEndX: number = 0; // Vị trí pixel kết thúc của chunk cuối cùng
+    private collidableTiles: ICollidable[] = [];
+    private collectableItems: ICollidable[] = [];
     
-    private MAP_DATA = [
-        [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-        [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-        [0, 0, 0, 2, 2, 2, 0, 0, 0, 0, 0, 0, 0], 
-        [0, 0, 0, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0], 
-        [0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0], 
-        [0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 0, 0], 
-        [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1], 
-    ];
+    // Cấu hình khoảng cách
+    private readonly SPAWN_DISTANCE_THRESHOLD = 800; // Còn 800px nữa hết map thì sinh tiếp
+    private readonly DELETE_DISTANCE_THRESHOLD = 1200; // Cách nhân vật 1200px về phía sau thì xóa
 
     constructor(app: PIXI.Application) {
         this.app = app;
+        // Bật tính năng sắp xếp lớp (Layer) để Player luôn nổi trên Tiles mới sinh
+        this.app.stage.sortableChildren = true;
     }
 
     public async init() {
@@ -41,74 +41,60 @@ export class GameManager {
         
         const loaded = await PIXI.Assets.load(Object.values(assetUrls));
 
-        const textureIdle = loaded[assetUrls.idle] as PIXI.Texture;
-        const textureRun = loaded[assetUrls.run] as PIXI.Texture;
-        const textureJump = loaded[assetUrls.jump] as PIXI.Texture;
-        const textureFall = loaded[assetUrls.fall] as PIXI.Texture;
-        const textureTile = loaded[assetUrls.tile] as PIXI.Texture;
-        const textureFruitStrip = loaded[assetUrls.fruitStrip] as PIXI.Texture;
-        const textureFruitCollectedStrip = loaded[assetUrls.fruitCollected] as PIXI.Texture;
-        
+        // Chuẩn bị Textures
         const playerTextures = {
-            'idle': textureIdle, 'run': textureRun, 'jump': textureJump, 'fall': textureFall
+            'idle': loaded[assetUrls.idle], 'run': loaded[assetUrls.run], 
+            'jump': loaded[assetUrls.jump], 'fall': loaded[assetUrls.fall]
         };
-        const fruitFrames = getFramesFromSpriteSheet(textureFruitStrip, 32, 32, 6);
-        const collectedFrames = getFramesFromSpriteSheet(textureFruitCollectedStrip, 32, 32, 6);
+        const fruitFrames = getFramesFromSpriteSheet(loaded[assetUrls.fruitStrip], 32, 32, 6);
+        const collectedFrames = getFramesFromSpriteSheet(loaded[assetUrls.fruitCollected], 32, 32, 6);
+        const tileTexture = loaded[assetUrls.tile];
 
-        // 3. Setup Môi trường: Xây dựng Map VÀ thu thập danh sách Tiles
-        this.buildMap(textureTile, fruitFrames, collectedFrames);
+        // 1. Khởi tạo LevelGenerator
+        this.levelGenerator = new LevelGenerator(tileTexture, fruitFrames, collectedFrames);
 
-        // 4. Tạo Player VÀ GÁN Tiles cho nó
-        const player = EntityFactory.createPlayer(playerTextures, this);
-        this.addEntity(player);
-        
-        // ✨Truyền danh sách Tiles vào PhysicsComponent của Player
-        const playerPhysics = player.getComponent(PhysicsComponent);
-        if (playerPhysics) {
-            playerPhysics.collidableTiles = this.collidableTiles;
-            playerPhysics.collectableItems = this.collectableItems;
+        // 2. Sinh Map khởi đầu (Buffer 3-4 chunks để lấp đầy màn hình lúc đầu)
+        // Reset điểm bắt đầu về 0
+        this.lastChunkEndX = 0; 
+        for (let i = 0; i < 4; i++) {
+            this.spawnChunk();
         }
 
-        // 5. Start Loop
+        // 3. Tạo Player
+        this.player = EntityFactory.createPlayer(playerTextures, this);
+        this.player.zIndex = 100; // Đặt Z-Index cao để luôn vẽ đè lên Map
+        this.addEntity(this.player);
+        
+        // Gán tham chiếu vật lý ban đầu
+        this.updatePlayerPhysicsRef();
+
+        // 4. Start Loop
         this.app.ticker.add((ticker) => {
             this.update(ticker.deltaTime);
         });
     }
 
     /**
-     * Hàm xây dựng Map dựa trên dữ liệu MAP_DATA VÀ thu thập các vật thể có thể va chạm
+     * Logic sinh Chunk mới và nối vào đuôi
      */
-    private buildMap(tileTexture: PIXI.Texture, fruitFrames: PIXI.Texture[], collectedFrames: PIXI.Texture[]) {
-        for (let row = 0; row < this.MAP_DATA.length; row++) {
-            for (let col = 0; col < this.MAP_DATA[row].length; col++) {
-                const tileType = this.MAP_DATA[row][col];
-                const x = col * this.TILE_SIZE;
-                const y = row * this.TILE_SIZE; 
+    private spawnChunk() {
+        if (!this.levelGenerator) return;
 
-                if (tileType === 1) {
-                    const tile = EntityFactory.createTile(tileTexture, x, y);
-                    this.addEntity(tile);
-                    
-                    this.collidableTiles.push({
-                        id: tile.id, x: tile.x, y: tile.y,
-                        width: this.TILE_SIZE, height: this.TILE_SIZE, name: 'tile'
-                    });
+        // Gọi generator để tạo data tại vị trí cuối cùng
+        const data = this.levelGenerator.generateNextChunk(this.lastChunkEndX);
+        
+        // Cập nhật vị trí cuối mới
+        this.lastChunkEndX = data.nextStartX;
 
-                } else if (tileType === 2) {
-                    // ✨ TRUYỀN collectedFrames VÀO Factory
-                    const fruit = EntityFactory.createFruit(fruitFrames, collectedFrames, x, y); 
-                    this.addEntity(fruit);
-                    
-                    // ✨ THÊM FRUIT VÀO DANH SÁCH COLLECTABLE
-                    this.collectableItems.push({
-                        id: fruit.id, x: fruit.x, y: fruit.y,
-                        width: 48, // Fruit 32x32 scale 1.5x
-                        height: 48, // Fruit 32x32 scale 1.5x
-                        name: 'fruit'
-                    });
-                }
-            }
-        }
+        // Thêm entities vào scene
+        data.entities.forEach(entity => {
+            entity.zIndex = 1; // Map nằm dưới
+            this.addEntity(entity);
+        });
+
+        // Cập nhật danh sách va chạm
+        this.collidableTiles.push(...data.collidables);
+        this.collectableItems.push(...data.collectables);
     }
 
     private addEntity(entity: Entity) {
@@ -117,15 +103,74 @@ export class GameManager {
     }
 
     private update(delta: number) {
+        // Update logic của từng entity
         for (const entity of this.entities) {
             entity.update(delta);
         }
 
-        this.entities = this.entities.filter(entity => {
-            // Kiểm tra xem entity (hoặc component sprite bên trong) đã bị destroy chưa
-            // PIXI Container có thuộc tính 'destroyed'
-            return !entity.destroyed; 
+        if (this.player) {
+            // 1. Logic CAMERA
+            let targetStageX = (this.GAME_WIDTH / 2) - this.player.x;
+            if (targetStageX > 0) targetStageX = 0; // Chặn biên trái
+            this.app.stage.x = targetStageX;
+
+            // 2. Logic INFINITE MAP (Sinh map mới)
+            // Nếu khoảng cách từ Player đến cuối Map < 800px -> Sinh tiếp
+            const distToEnd = this.lastChunkEndX - this.player.x;
+            if (distToEnd < this.SPAWN_DISTANCE_THRESHOLD) {
+                this.spawnChunk();
+                
+                // Tiện thể dọn dẹp map cũ luôn để tối ưu performance
+                this.cleanupOldChunks();
+                
+                // Cập nhật lại tham chiếu physics sau khi thay đổi mảng
+                this.updatePlayerPhysicsRef();
+            }
+        }
+
+        // Loại bỏ các entity đã bị mark destroyed
+        this.entities = this.entities.filter(entity => !entity.destroyed);
+    }
+
+    /**
+     * Cập nhật tham chiếu array cho Physics Component
+     * Cần gọi mỗi khi array collidableTiles hoặc collectableItems thay đổi (thêm mới hoặc xóa cũ)
+     */
+    private updatePlayerPhysicsRef() {
+        if (!this.player) return;
+        const physics = this.player.getComponent(PhysicsComponent);
+        if (physics) {
+            physics.collidableTiles = this.collidableTiles;
+            physics.collectableItems = this.collectableItems;
+        }
+    }
+
+    /**
+     * Dọn dẹp các Chunk đã đi qua quá xa
+     * Giúp giảm tải CPU và RAM
+     */
+    private cleanupOldChunks() {
+        if (!this.player) return;
+        
+        // Tính mốc tọa độ cần xóa (Ví dụ: Player ở 2000, xóa tất cả cái gì < 800)
+        const deleteThreshold = this.player.x - this.DELETE_DISTANCE_THRESHOLD;
+
+        // 1. Destroy Entity PIXI (Xóa khỏi màn hình)
+        this.entities.forEach(e => {
+            // 🔴 SỬA LỖI TẠI ĐÂY:
+            // Phải kiểm tra xem entity có bị destroy trước đó chưa (ví dụ do bị ăn mất)
+            // Nếu e.destroyed = true thì thuộc tính .x của PIXI không còn tồn tại -> gây crash
+            if (!e || e.destroyed) return; 
+
+            // Sau khi đảm bảo nó còn sống, mới kiểm tra vị trí
+            if (e.id !== 'player' && e.x < deleteThreshold) {
+                e.destroy(); 
+            }
         });
+
+        // 2. Xóa dữ liệu va chạm khỏi mảng Logic
+        this.collidableTiles = this.collidableTiles.filter(t => t.x >= deleteThreshold);
+        this.collectableItems = this.collectableItems.filter(i => i.x >= deleteThreshold);
     }
 
     public findEntityById(id: string): Entity | undefined {

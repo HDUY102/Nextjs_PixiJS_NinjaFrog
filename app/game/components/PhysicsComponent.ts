@@ -3,6 +3,7 @@ import { Component } from '../../core/Component';
 import { TransformComponent } from './TransformComponent';
 import { FruitComponent } from './FruitComponent';
 import { Entity } from '@/app/core/Entity';
+import * as PIXI from 'pixi.js';
 
 interface IGameManager {
     findEntityById(id: string): Entity | undefined;
@@ -20,7 +21,9 @@ export class PhysicsComponent extends Component {
     private maxJumps: number = 2; 
     private jumpsRemaining: number = 2;
     public isGrounded: boolean = false; 
-
+    private isGameOver: boolean = false;
+    
+    public enemies: Entity[] = [];
     public collidableTiles: ICollidable[] = []; 
     public collectableItems: ICollidable[] = [];
     private gameManager: IGameManager;
@@ -31,6 +34,7 @@ export class PhysicsComponent extends Component {
     }
 
     update(delta: number): void {
+        if (this.isGameOver) return;
         const transform = this.entity.requireComponent(TransformComponent);
         
         // 1. Áp dụng trọng lực
@@ -54,6 +58,9 @@ export class PhysicsComponent extends Component {
         if (this.gameManager) {
             this.handleCollectionCollision();
         }
+
+        // Kiểm tra va chạm với quái vật
+        this.handleEnemyCollision();
     }
 
     private getHitbox() {
@@ -67,16 +74,11 @@ export class PhysicsComponent extends Component {
 
     private handleVerticalCollision(transform: TransformComponent): void {
         const box = this.getHitbox();
-        let wasOnGround = this.isGrounded;
         this.isGrounded = false;
 
         for (const tile of this.collidableTiles) {
-            // Kiểm tra xem nhân vật có nằm trong phạm vi chiều ngang của Tile không
-            // Thêm lề 2px để tránh bị kẹt ở mép
             if (box.right > tile.x + 2 && box.left < tile.x + TILE_SIZE - 2) {
-                
-                // Va chạm khi đang rơi xuống (Đứng trên sàn)
-                if (transform.velocityY > 0) {
+                if (transform.velocityY > 0) { // Rơi xuống
                     if (box.bottom > tile.y && box.top < tile.y) {
                         this.entity.y = tile.y - PLAYER_HALF_HEIGHT;
                         transform.velocityY = 0;
@@ -84,9 +86,7 @@ export class PhysicsComponent extends Component {
                         this.jumpsRemaining = this.maxJumps;
                         return; 
                     }
-                } 
-                // Va chạm khi đang nhảy lên (Đụng trần)
-                else if (transform.velocityY < 0) {
+                } else if (transform.velocityY < 0) { // Nhảy lên
                     if (box.top < tile.y + TILE_SIZE && box.bottom > tile.y + TILE_SIZE) {
                         this.entity.y = tile.y + TILE_SIZE + PLAYER_HALF_HEIGHT;
                         transform.velocityY = 0;
@@ -99,21 +99,15 @@ export class PhysicsComponent extends Component {
 
     private handleHorizontalCollision(transform: TransformComponent): void {
         const box = this.getHitbox();
-
         for (const tile of this.collidableTiles) {
-            // Kiểm tra phạm vi chiều dọc (Chỉ tính va chạm ngang nếu không phải đang đứng trên đầu tile)
             if (box.bottom > tile.y + 5 && box.top < tile.y + TILE_SIZE - 5) {
-                
-                // Va chạm tường bên trái (Nhân vật đi sang phải)
                 if (transform.velocityX > 0) {
                     if (box.right > tile.x && box.left < tile.x) {
                         this.entity.x = tile.x - PLAYER_HALF_WIDTH;
                         transform.velocityX = 0;
                         break;
                     }
-                }
-                // Va chạm tường bên phải (Nhân vật đi sang trái)
-                else if (transform.velocityX < 0) {
+                } else if (transform.velocityX < 0) {
                     if (box.left < tile.x + TILE_SIZE && box.right > tile.x + TILE_SIZE) {
                         this.entity.x = tile.x + TILE_SIZE + PLAYER_HALF_WIDTH;
                         transform.velocityX = 0;
@@ -130,23 +124,61 @@ export class PhysicsComponent extends Component {
             const item = this.collectableItems[i];
             const itemEntity = this.gameManager.findEntityById(item.id); 
             if (!itemEntity) continue; 
-
             const itemComp = itemEntity.getComponent(FruitComponent);
             if (!itemComp || itemComp['isCollecting']) continue;
 
             const itemBox = {
-                left: item.x - item.width / 2,
-                right: item.x + item.width / 2,
-                top: item.y - item.height / 2,
-                bottom: item.y + item.height / 2
+                left: item.x - item.width / 2, right: item.x + item.width / 2,
+                top: item.y - item.height / 2, bottom: item.y + item.height / 2
             };
-
             if (box.right > itemBox.left && box.left < itemBox.right &&
                 box.bottom > itemBox.top && box.top < itemBox.bottom) {
                 itemComp.collect();
                 this.collectableItems.splice(i, 1);
             }
         }
+    }
+
+    private handleEnemyCollision(): void {
+        if (this.isGameOver) return;
+
+        const playerBox = this.getHitbox();
+
+        for (const enemy of this.enemies) {
+            if (enemy.destroyed) continue;
+
+            // Hitbox quái vật
+            const enemyBox = {
+                left: enemy.x - 20, 
+                right: enemy.x + 20,
+                top: enemy.y - 30,
+                bottom: enemy.y
+            };
+
+            if (playerBox.right > enemyBox.left && 
+                playerBox.left < enemyBox.right &&
+                playerBox.bottom > enemyBox.top && 
+                playerBox.top < enemyBox.bottom) {
+                
+                this.triggerGameOver();
+                break;
+            }
+        }
+    }
+
+    private triggerGameOver(): void {
+        if (this.isGameOver) return; // Chặn gọi 2 lần
+        this.isGameOver = true; 
+        
+        // Dừng Ticker của PIXI ngay lập tức
+        PIXI.Ticker.shared.stop(); 
+
+        // Dùng setTimeout để đảm bảo render frame cuối xong mới hiện alert
+        setTimeout(() => {
+            alert("BẠN ĐÃ THUA! Nhấn OK để chơi lại.");
+            // Reload trang để reset toàn bộ game về ban đầu
+            window.location.reload();
+        }, 50);
     }
 
     public jump(): boolean {

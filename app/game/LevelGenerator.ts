@@ -9,17 +9,19 @@ export class LevelGenerator {
     private tileTexture: PIXI.Texture;
     private fruitFrames: PIXI.Texture[];
     private collectedFrames: PIXI.Texture[];
-    
+    private enemyTexture: PIXI.Texture;
     private TILE_SIZE = 64;
 
     constructor(
         tileTexture: PIXI.Texture, 
         fruitFrames: PIXI.Texture[], 
-        collectedFrames: PIXI.Texture[]
+        collectedFrames: PIXI.Texture[],
+        enemyTexture: PIXI.Texture
     ) {
         this.tileTexture = tileTexture;
         this.fruitFrames = fruitFrames;
         this.collectedFrames = collectedFrames;
+        this.enemyTexture = enemyTexture;
         
         // Cấu hình Texture để không bị mờ khi phóng to (Pixel Art)
         if (this.tileTexture.baseTexture.scaleMode !== PIXI.SCALE_MODES.NEAREST) {
@@ -27,7 +29,7 @@ export class LevelGenerator {
         }
     }
 
-    public generateNextChunk(startX: number): { 
+    public generateNextChunk(startX: number, gameManager: any): { 
         entities: Entity[], 
         collidables: ICollidable[], 
         collectables: ICollidable[],
@@ -88,6 +90,9 @@ export class LevelGenerator {
                         height: 28, 
                         name: 'fruit'
                     });
+                }else if (tileType === 3) { // Enemy
+                    const enemy = EntityFactory.createEnemy(this.enemyTexture, this.enemyTexture, x, y, gameManager);
+                    entities.push(enemy);
                 }
             }
         }

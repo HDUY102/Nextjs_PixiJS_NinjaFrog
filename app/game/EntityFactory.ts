@@ -6,6 +6,7 @@ import { InputComponent } from './components/InputComponent';
 import { AnimatedSpriteComponent, AnimationState } from '../components/AnimatedSpriteComponent';
 import { getFramesFromSpriteSheet } from '../core/Utils';
 import { FruitComponent } from './components/FruitComponent';
+import { EnemyPatrolComponent } from './components/EnemyPatrolComponent';
 
 interface IGameManager {
     findEntityById(id: string): Entity | undefined;
@@ -40,10 +41,36 @@ export class EntityFactory {
         return player;
     }
 
-    static createEnemy(x: number, y: number): Entity {
-        const enemy = new Entity('enemy');
-        enemy.x = x;
-        enemy.y = y;
+    static createEnemy(idleTexture: PIXI.Texture, runTexture: PIXI.Texture, x: number, y: number,gameManager: IGameManager): Entity {
+        const uniqueId = `enemy_${Date.now()}_${Math.random()}`; // ID ngẫu nhiên để không bị trùng
+        const enemy = new Entity(uniqueId);
+        enemy.x = x + TILE_SIZE / 2;
+        enemy.y = y - 10; // Đặt ở đáy ô gạch
+        // Cắt Frame cho Snail (Size 38x24, có 8 frames idle)
+        const idleFrames = idleTexture ? getFramesFromSpriteSheet(idleTexture, 32, 32, 11) : [];
+        const runFrames = runTexture ? getFramesFromSpriteSheet(runTexture, 32, 32, 16) : idleFrames;
+        const animations: Record<AnimationState, PIXI.Texture[]> = {
+            idle: idleFrames,
+            run: runFrames, // Tạm thời dùng idle cho run nếu chưa có texture riêng
+            jump: idleFrames,
+            fall: idleFrames
+        };
+
+        
+
+        enemy
+            .addComponent(new TransformComponent())
+            .addComponent(new AnimatedSpriteComponent(animations))
+            .addComponent(new PhysicsComponent(gameManager))
+            .addComponent(new EnemyPatrolComponent());
+
+        // Chỉnh anchor về giữa đáy để quái đứng sát đất
+        const spriteComp = enemy.getComponent(AnimatedSpriteComponent);
+        if (spriteComp) {
+            spriteComp.sprite.anchor.set(0.5, 0.5); // Chân chạm đất
+        }
+
+        enemy.scale.set(2); // Phóng to giống Player
         return enemy;
     }
 

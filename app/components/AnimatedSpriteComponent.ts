@@ -7,7 +7,7 @@ import { TransformComponent } from '../game/components/TransformComponent';
 export type AnimationState = 'idle' | 'run' | 'jump' | 'fall';
 
 export class AnimatedSpriteComponent extends Component {
-    private sprite: PIXI.AnimatedSprite;
+    public sprite: PIXI.AnimatedSprite;
     private animations: Record<AnimationState, PIXI.Texture[]>;
     private currentState: AnimationState = 'idle';
 
@@ -22,42 +22,48 @@ export class AnimatedSpriteComponent extends Component {
         this.sprite.play();
     }
 
+    public play(state: AnimationState): void {
+        if (this.currentState === state) return; // Nếu đang chạy đúng state rồi thì thôi
+
+        this.currentState = state;
+        
+        // Kiểm tra xem animation đó có tồn tại texture không
+        if (this.animations[state] && this.animations[state].length > 0) {
+            this.sprite.textures = this.animations[state];
+            this.sprite.play();
+        }
+    }
+
     onAttach(entity: any) {
         super.onAttach(entity);
         entity.addChild(this.sprite);
     }
 
     update(delta: number): void {
-        const physics = this.entity.getComponent(PhysicsComponent);
+        const physics = this.entity.getComponent(PhysicsComponent)as any;
         const transform = this.entity.requireComponent(TransformComponent);
 
         if (!physics) return;
 
         // 1. Xử lý Lật hình (Flip) khi di chuyển trái phải
-        if (transform.velocityX < 0) {
-            this.sprite.scale.x = -1; // Quay trái
-        } else if (transform.velocityX > 0) {
-            this.sprite.scale.x = 1;  // Quay phải
+        if (transform.velocityX < -0.1) {
+            this.sprite.scale.x = -Math.abs(this.sprite.scale.x); // Quay trái
+        } else if (transform.velocityX > 0.1) {
+            this.sprite.scale.x = Math.abs(this.sprite.scale.x);  // Quay phải
         }
 
         // 2. State Machine: Quyết định Animation nào được chạy
         let newState: AnimationState = 'idle';
 
-        if (physics.velocityY < 0) {
-            newState = 'jump'; // Đang bay lên
-        } else if (physics.velocityY > 0 && !this.isOnGround(physics)) {
-            newState = 'fall'; // Đang rơi xuống
-        } else if (Math.abs(transform.velocityX) > 0.1) {
-            newState = 'run';  // Đang chạy
-        } else {
-            newState = 'idle'; // Đứng yên
+        if (physics) {
+            if (physics.velocityY < -0.1) newState = 'jump';
+            else if (physics.velocityY > 0.1 && !physics.isGrounded) newState = 'fall';
+            else if (Math.abs(transform.velocityX) > 0.1) newState = 'run';
         }
 
         // 3. Chỉ thay đổi texture nếu trạng thái thay đổi
         if (this.currentState !== newState) {
-            this.currentState = newState;
-            this.sprite.textures = this.animations[newState];
-            this.sprite.play();
+            this.play(newState);
         }
     }
 

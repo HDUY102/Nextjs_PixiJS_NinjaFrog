@@ -9,7 +9,7 @@ export const PATTERNS: Record<string, MapChunk> = {
         [0, 0, 0, 0, 0], // Trái cây rải rác
         [0, 0, 0, 0, 0],
         [0, 0, 0, 0, 0],
-        [0, 2, 2, 2, 0],
+        [0, 2, 2, 2, 3],
         [1, 1, 1, 1, 1], // Đất liền mạch
     ],
 
@@ -20,7 +20,7 @@ export const PATTERNS: Record<string, MapChunk> = {
         [0, 0, 0, 0, 0],
         [0, 0, 0, 0, 0],
         [0, 0, 2, 0, 0], // Trái cây dụ người chơi nhảy
-        [0, 0, 0, 0, 0],
+        [0, 0, 0, 0, 3],
         [1, 1, 0, 1, 1], // Có lỗ hổng ở giữa
     ],
 
@@ -31,7 +31,7 @@ export const PATTERNS: Record<string, MapChunk> = {
         [0, 0, 0, 0, 1, 1],
         [0, 0, 0, 1, 1, 1],
         [0, 0, 2, 0, 0, 0],
-        [0, 1, 1, 0, 0, 0], // Bậc thấp
+        [3, 1, 1, 0, 3, 0], // Bậc thấp
         [1, 1, 1, 1, 1, 1], // Nền đất
     ],
 
@@ -39,10 +39,10 @@ export const PATTERNS: Record<string, MapChunk> = {
     PLATFORMS: [
         [0, 0, 0, 0, 0, 0, 0],
         [0, 0, 0, 2, 0, 0, 0],
-        [0, 0, 1, 1, 1, 0, 0], // Bệ trên cao
+        [0, 0, 0, 1, 1, 0, 0], // Bệ trên cao
         [0, 0, 0, 0, 0, 0, 0],
-        [0, 2, 0, 0, 0, 2, 0],
-        [1, 1, 0, 0, 0, 1, 1], // Bệ thấp
+        [0, 2, 3, 0, 0, 2, 0],
+        [1, 1, 1, 0, 0, 1, 1], // Bệ thấp
         [0, 0, 0, 0, 0, 0, 0], // Dưới cùng là vực thẳm (Nguy hiểm)
     ],
 
@@ -53,7 +53,7 @@ export const PATTERNS: Record<string, MapChunk> = {
         [0, 0, 0, 0, 0, 0],
         [0, 0, 1, 0, 1, 0], // Chướng ngại vật
         [0, 0, 1, 0, 1, 0],
-        [0, 2, 1, 2, 1, 2],
+        [3, 2, 1, 2, 1, 2],
         [1, 1, 1, 1, 1, 1],
     ]
 };

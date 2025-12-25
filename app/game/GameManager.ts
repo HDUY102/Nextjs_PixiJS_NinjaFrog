@@ -10,6 +10,7 @@ export class GameManager {
     private app: PIXI.Application;
     private entities: Entity[] = [];
     private player: Entity | null = null;
+    private enemies: Entity[] = [];
     private GAME_WIDTH: number = 800;
 
     // --- Quản lý Map ---
@@ -36,7 +37,8 @@ export class GameManager {
             fall: '/assets/ninja_frog/Fall (32x32).png',
             tile: '/assets/tile/Idle.png',
             fruitStrip: '/assets/fruit/Apple.png',
-            fruitCollected: '/assets/fruit/Collected.png'
+            fruitCollected: '/assets/fruit/Collected.png',
+            enemySnail: '/assets/enemy/Mushroom/Idle.png'
         };
         
         const loaded = await PIXI.Assets.load(Object.values(assetUrls));
@@ -51,7 +53,7 @@ export class GameManager {
         const tileTexture = loaded[assetUrls.tile];
 
         // 1. Khởi tạo LevelGenerator
-        this.levelGenerator = new LevelGenerator(tileTexture, fruitFrames, collectedFrames);
+        this.levelGenerator = new LevelGenerator(tileTexture, fruitFrames, collectedFrames, loaded[assetUrls.enemySnail]);
 
         // 2. Sinh Map khởi đầu (Buffer 3-4 chunks để lấp đầy màn hình lúc đầu)
         // Reset điểm bắt đầu về 0
@@ -81,20 +83,29 @@ export class GameManager {
         if (!this.levelGenerator) return;
 
         // Gọi generator để tạo data tại vị trí cuối cùng
-        const data = this.levelGenerator.generateNextChunk(this.lastChunkEndX);
+        const data = this.levelGenerator.generateNextChunk(this.lastChunkEndX, this);
         
         // Cập nhật vị trí cuối mới
         this.lastChunkEndX = data.nextStartX;
 
         // Thêm entities vào scene
         data.entities.forEach(entity => {
-            entity.zIndex = 1; // Map nằm dưới
             this.addEntity(entity);
+            if (entity.id.startsWith('enemy_')) {
+                this.enemies.push(entity);
+                const enPhysics = entity.getComponent(PhysicsComponent);
+                if (enPhysics) {
+                    // Gán danh sách gạch để quái vật không lơ lửng
+                    enPhysics.collidableTiles = this.collidableTiles;
+                }
+            }
         });
 
         // Cập nhật danh sách va chạm
         this.collidableTiles.push(...data.collidables);
         this.collectableItems.push(...data.collectables);
+
+        this.updatePlayerPhysicsRef();
     }
 
     private addEntity(entity: Entity) {
@@ -142,12 +153,12 @@ export class GameManager {
         if (physics) {
             physics.collidableTiles = this.collidableTiles;
             physics.collectableItems = this.collectableItems;
+            physics.enemies = this.enemies;
         }
     }
 
     /**
-     * Dọn dẹp các Chunk đã đi qua quá xa
-     * Giúp giảm tải CPU và RAM
+     * Dọn dẹp các Chunk đã đi qua quá xa giảm tải CPU và RAM
      */
     private cleanupOldChunks() {
         if (!this.player) return;
@@ -157,7 +168,6 @@ export class GameManager {
 
         // 1. Destroy Entity PIXI (Xóa khỏi màn hình)
         this.entities.forEach(e => {
-            // 🔴 SỬA LỖI TẠI ĐÂY:
             // Phải kiểm tra xem entity có bị destroy trước đó chưa (ví dụ do bị ăn mất)
             // Nếu e.destroyed = true thì thuộc tính .x của PIXI không còn tồn tại -> gây crash
             if (!e || e.destroyed) return; 
@@ -171,6 +181,7 @@ export class GameManager {
         // 2. Xóa dữ liệu va chạm khỏi mảng Logic
         this.collidableTiles = this.collidableTiles.filter(t => t.x >= deleteThreshold);
         this.collectableItems = this.collectableItems.filter(i => i.x >= deleteThreshold);
+        this.enemies = this.enemies.filter(e => !e.destroyed);
     }
 
     public findEntityById(id: string): Entity | undefined {

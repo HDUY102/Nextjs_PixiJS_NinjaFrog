@@ -32,12 +32,11 @@ export class EntityFactory {
         player
             .addComponent(new TransformComponent())
             .addComponent(new AnimatedSpriteComponent(animations))
-            .addComponent(new PhysicsComponent(gameManager))
+            .addComponent(new PhysicsComponent(gameManager, 30, 50))
             .addComponent(new InputComponent());
 
         // Phóng to nhân vật lên 2 lần
         player.scale.set(2); 
-
         return player;
     }
 
@@ -45,32 +44,34 @@ export class EntityFactory {
         const uniqueId = `enemy_${Date.now()}_${Math.random()}`; // ID ngẫu nhiên để không bị trùng
         const enemy = new Entity(uniqueId);
         enemy.x = x + TILE_SIZE / 2;
-        enemy.y = y - 10; // Đặt ở đáy ô gạch
+        enemy.y = y - 20; // Đặt ở đáy ô gạch
+
+        if (!runTexture) console.warn("Run Texture cho Enemy bị thiếu!");
+
         // Cắt Frame cho Snail (Size 38x24, có 8 frames idle)
         const idleFrames = idleTexture ? getFramesFromSpriteSheet(idleTexture, 32, 32, 11) : [];
         const runFrames = runTexture ? getFramesFromSpriteSheet(runTexture, 32, 32, 16) : idleFrames;
         const animations: Record<AnimationState, PIXI.Texture[]> = {
             idle: idleFrames,
-            run: runFrames, // Tạm thời dùng idle cho run nếu chưa có texture riêng
+            run: runFrames,
             jump: idleFrames,
             fall: idleFrames
         };
 
-        
-
+        const spriteComp = new AnimatedSpriteComponent(animations);
+        spriteComp.flipWithVelocity = false;
         enemy
             .addComponent(new TransformComponent())
-            .addComponent(new AnimatedSpriteComponent(animations))
-            .addComponent(new PhysicsComponent(gameManager))
+            .addComponent(spriteComp)
+            .addComponent(new PhysicsComponent(gameManager, 40, 70))
             .addComponent(new EnemyPatrolComponent());
 
         // Chỉnh anchor về giữa đáy để quái đứng sát đất
-        const spriteComp = enemy.getComponent(AnimatedSpriteComponent);
         if (spriteComp) {
-            spriteComp.sprite.anchor.set(0.5, 0.5); // Chân chạm đất
+            spriteComp.sprite.anchor.set(0.5, 1); // Chân chạm đất
         }
 
-        enemy.scale.set(2); // Phóng to giống Player
+        enemy.scale.set(2); // Phóng to giống Enemy
         return enemy;
     }
 

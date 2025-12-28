@@ -38,7 +38,8 @@ export class GameManager {
             tile: '/assets/tile/Idle.png',
             fruitStrip: '/assets/fruit/Apple.png',
             fruitCollected: '/assets/fruit/Collected.png',
-            enemySnail: '/assets/enemy/Mushroom/Idle.png'
+            enemySnail: '/assets/enemy/Mushroom/Idle.png',
+            enemyRun: '/assets/enemy/Mushroom/Run.png'
         };
         
         const loaded = await PIXI.Assets.load(Object.values(assetUrls));

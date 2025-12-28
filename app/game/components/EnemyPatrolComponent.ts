@@ -6,8 +6,6 @@ import { PhysicsComponent } from './PhysicsComponent';
 export class EnemyPatrolComponent extends Component {
     private speed: number = 2; // Tốc độ di chuyển
     private direction: number = -1; // -1: Trái, 1: Phải
-    private moveRange: number = 150; // Phạm vi đi tuần tra
-    private startX: number = 0;
     private initialized: boolean = false;
 
     update(delta: number): void {
@@ -22,30 +20,32 @@ export class EnemyPatrolComponent extends Component {
             // this.startX = this.entity.x;
             this.initialized = true;
             // Chạy animation 'run' hoặc 'idle'
-            spriteComp.play('run'); 
+            spriteComp.play('run');
+            this.updateSpriteDirection(spriteComp);
         }
 
         // 1. Di chuyển
         transform.velocityX = this.speed * this.direction;
-        this.entity.x += transform.velocityX * delta;
 
         // 2. Logic quay đầu (Patrol đơn giản)
         // Nếu đi quá xa bên trái hoặc phải so với điểm xuất phát -> Quay đầu
-        if (this.entity.x < this.startX - this.moveRange) {
-            this.direction = 1;
-            spriteComp.sprite.scale.x = Math.abs(spriteComp.sprite.scale.x); // Quay mặt sang phải
-        } else if (this.entity.x > this.startX + this.moveRange) {
-            this.direction = -1;
-            spriteComp.sprite.scale.x = -Math.abs(spriteComp.sprite.scale.x); // Quay mặt sang trái
+        if ((this.direction === -1 && physics.collisionFlags.left) || 
+            (this.direction === 1 && physics.collisionFlags.right)) {
+            
+            this.direction *= -1; // Đảo chiều di chuyển
+            
+            // Cập nhật ngay lập tức vận tốc mới để frame sau không bị kẹt
+            transform.velocityX = this.speed * this.direction;
+            
+            // Cập nhật hướng nhìn của Sprite
+            this.updateSpriteDirection(spriteComp);
         }
     }
 
-    private flipSprite(spriteComp: AnimatedSpriteComponent, flipX: boolean) {
-        // Vì AnimatedSpriteComponent của bạn có thể không public sprite, 
-        // ta ép kiểu any để truy cập nhanh (hoặc bạn có thể thêm method setFlip trong Component đó)
-        const sprite = (spriteComp as any).sprite;
+    private updateSpriteDirection(spriteComp: AnimatedSpriteComponent) {
+        const sprite = spriteComp.sprite;
         if (sprite) {
-            sprite.scale.x = this.direction > 0 ? Math.abs(sprite.scale.x) : -Math.abs(sprite.scale.x);
+            sprite.scale.x = (this.direction === -1) ? 1 : -1;
         }
     }
 }

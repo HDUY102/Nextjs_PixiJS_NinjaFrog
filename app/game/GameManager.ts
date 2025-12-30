@@ -35,11 +35,14 @@ export class GameManager {
             run: '/assets/ninja_frog/Run (32x32).png',
             jump: '/assets/ninja_frog/Jump (32x32).png',
             fall: '/assets/ninja_frog/Fall (32x32).png',
+            double_jump: '/assets/ninja_frog/Double Jump (32x32).png',
             tile: '/assets/tile/Idle.png',
+            playerHit: '/assets/ninja_frog/Hit (32x32).png',
             fruitStrip: '/assets/fruit/Apple.png',
             fruitCollected: '/assets/fruit/Collected.png',
             enemySnail: '/assets/enemy/Mushroom/Idle.png',
-            enemyRun: '/assets/enemy/Mushroom/Run.png'
+            enemyRun: '/assets/enemy/Mushroom/Run.png',
+            enemyHit: '/assets/enemy/Mushroom/Hit.png'
         };
         
         const loaded = await PIXI.Assets.load(Object.values(assetUrls));
@@ -47,14 +50,15 @@ export class GameManager {
         // Chuẩn bị Textures
         const playerTextures = {
             'idle': loaded[assetUrls.idle], 'run': loaded[assetUrls.run], 
-            'jump': loaded[assetUrls.jump], 'fall': loaded[assetUrls.fall]
+            'jump': loaded[assetUrls.jump], 'fall': loaded[assetUrls.fall],
+            'hit': loaded[assetUrls.playerHit], 'double_jump': loaded[assetUrls.double_jump]
         };
         const fruitFrames = getFramesFromSpriteSheet(loaded[assetUrls.fruitStrip], 32, 32, 6);
         const collectedFrames = getFramesFromSpriteSheet(loaded[assetUrls.fruitCollected], 32, 32, 6);
         const tileTexture = loaded[assetUrls.tile];
 
         // 1. Khởi tạo LevelGenerator
-        this.levelGenerator = new LevelGenerator(tileTexture, fruitFrames, collectedFrames, loaded[assetUrls.enemySnail]);
+        this.levelGenerator = new LevelGenerator(tileTexture, fruitFrames, collectedFrames, loaded[assetUrls.enemySnail],loaded[assetUrls.enemyHit]);
 
         // 2. Sinh Map khởi đầu (Buffer 3-4 chunks để lấp đầy màn hình lúc đầu)
         // Reset điểm bắt đầu về 0

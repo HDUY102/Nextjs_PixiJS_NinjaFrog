@@ -27,6 +27,8 @@ export class EntityFactory {
             run:  getFramesFromSpriteSheet(textures['run'], 32, 32, 12),
             jump: getFramesFromSpriteSheet(textures['jump'], 32, 32, 1),
             fall: getFramesFromSpriteSheet(textures['fall'], 32, 32, 1),
+            hit: getFramesFromSpriteSheet(textures['hit'], 32, 32, 1),
+            double_jump: getFramesFromSpriteSheet(textures['double_jump'], 32, 32, 6),
         };
 
         player
@@ -40,7 +42,7 @@ export class EntityFactory {
         return player;
     }
 
-    static createEnemy(idleTexture: PIXI.Texture, runTexture: PIXI.Texture, x: number, y: number,gameManager: IGameManager): Entity {
+    static createEnemy(idleTexture: PIXI.Texture, runTexture: PIXI.Texture, hitTexture: PIXI.Texture, x: number, y: number,gameManager: IGameManager): Entity {
         const uniqueId = `enemy_${Date.now()}_${Math.random()}`; // ID ngẫu nhiên để không bị trùng
         const enemy = new Entity(uniqueId);
         enemy.x = x + TILE_SIZE / 2;
@@ -51,15 +53,27 @@ export class EntityFactory {
         // Cắt Frame cho Snail (Size 38x24, có 8 frames idle)
         const idleFrames = idleTexture ? getFramesFromSpriteSheet(idleTexture, 32, 32, 11) : [];
         const runFrames = runTexture ? getFramesFromSpriteSheet(runTexture, 32, 32, 16) : idleFrames;
+        const hitFrames = hitTexture ? getFramesFromSpriteSheet(hitTexture, 32, 32, 5) : idleFrames;
         const animations: Record<AnimationState, PIXI.Texture[]> = {
             idle: idleFrames,
             run: runFrames,
             jump: idleFrames,
-            fall: idleFrames
+            fall: idleFrames,
+            hit: hitFrames,
+            double_jump: idleFrames
+            
         };
 
         const spriteComp = new AnimatedSpriteComponent(animations);
         spriteComp.flipWithVelocity = false;
+
+        // Đảm bảo animation hit không lặp lại vô tận
+        spriteComp.sprite.onComplete = () => {
+            if (spriteComp.currentState === 'hit') {
+                enemy.destroy();
+            }
+        };
+
         enemy
             .addComponent(new TransformComponent())
             .addComponent(spriteComp)

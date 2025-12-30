@@ -4,21 +4,18 @@ import { TransformComponent } from './TransformComponent';
 import { FruitComponent } from './FruitComponent';
 import { Entity } from '@/app/core/Entity';
 import * as PIXI from 'pixi.js';
+import { AnimatedSpriteComponent } from '@/app/components/AnimatedSpriteComponent';
 
 interface IGameManager {
     findEntityById(id: string): Entity | undefined;
 }
 
 const TILE_SIZE = 64;
-const HITBOX_WIDTH = 38;  
-const HITBOX_HEIGHT = 60; 
-const PLAYER_HALF_WIDTH = HITBOX_WIDTH / 2;
-const PLAYER_HALF_HEIGHT = HITBOX_HEIGHT / 2;
 
 export class PhysicsComponent extends Component {
     private gravity: number = 0.6;
     private maxJumps: number = 2; 
-    private jumpsRemaining: number = 2;
+    public jumpsRemaining: number = 2;
     public isGrounded: boolean = false; 
     private isGameOver: boolean = false;
     private maxFallSpeed: number = 15;
@@ -39,9 +36,10 @@ export class PhysicsComponent extends Component {
     }
 
     update(delta: number): void {
-        if (this.isGameOver) return;
+        if (!this.entity || !this.enabled || this.isGameOver) return;
         const safeDelta = Math.min(delta, 2.0);
         const transform = this.entity.requireComponent(TransformComponent);
+        if (!transform) return;
         
         this.resetCollisionFlags();
 
@@ -171,22 +169,75 @@ export class PhysicsComponent extends Component {
         if (this.isGameOver) return;
 
         const playerBox = this.getHitbox();
+        const transform = this.entity.requireComponent(TransformComponent);
         for (const enemy of this.enemies) {
             if (enemy.destroyed) continue;
 
             // Lấy hitbox của enemy (giả sử enemy size 40x40)
-            const enemyHalfW = 20;
-            const enemyHalfH = 20;
+            const enemyHalfW = 25;
+            const enemyHeight = 40;
+            const enemyTop = enemy.y - enemyHeight;
             
-            if (playerBox.right > enemy.x - enemyHalfW && 
-                playerBox.left < enemy.x + enemyHalfW &&
-                playerBox.bottom > enemy.y - enemyHalfH && 
-                playerBox.top < enemy.y + enemyHalfH) {
-                
-                this.triggerGameOver();
-                break;
+            if (playerBox.right > enemy.x - enemyHalfW && playerBox.left < enemy.x + enemyHalfW &&
+                playerBox.bottom > enemyTop && playerBox.top < enemy.y) 
+            {
+                const isSteppingOnHead = transform.velocityY > 0 && playerBox.bottom < enemy.y - 10;
+                if (isSteppingOnHead) {
+                    this.killEnemy(enemy);
+                    // Cho Player nảy lên một chút sau khi giẫm
+                    transform.velocityY = -10; 
+                    break; 
+                } else {
+                    // Nếu va chạm ngang hoặc Player đang nhảy lên đụng Enemy -> Game Over
+                    this.triggerGameOver();
+                    break;
+                }
             }
         }
+    }
+
+    private killEnemy(enemy: Entity): void {
+        // 1. Ngắt ngay lập tức khả năng gây sát thương và di chuyển
+        const enemyPhysics = enemy.getComponent(PhysicsComponent);
+        if (enemyPhysics) {
+            enemyPhysics.enabled = false; // Ngừng chạy update của chính nó
+        }
+
+        // 2. Dừng di chuyển của quái
+        const enemyTransform = enemy.getComponent(TransformComponent);
+        if (enemyTransform) enemyTransform.velocityX = 0;
+
+        // 3. Chạy animation 'hit'
+        const enemySprite = enemy.getComponent(AnimatedSpriteComponent);
+        if (enemySprite) {
+            enemySprite.sprite.loop = false; // Chỉ chạy 1 lần rồi biến mất
+            enemySprite.play('hit');
+            // Lắng nghe sự kiện kết thúc animation hit để xóa quái
+            enemySprite.sprite.onComplete = () => {
+                // Kiểm tra currentState (giờ đã là public)
+                if (enemySprite.currentState === 'hit' && !enemy.destroyed) {
+                    enemy.destroy();
+                }
+            };
+        }else {
+            enemy.destroy();
+        }
+
+        // 4. Loại bỏ khỏi danh sách enemies ngay lập tức để không gây sát thương nữa
+        this.enemies = this.enemies.filter(e => e !== enemy);
+        
+        // 5. (Tùy chọn) Thêm hiệu ứng mờ dần
+        const fadeInterval = setInterval(() => {
+            if (enemy.destroyed) {
+                clearInterval(fadeInterval);
+                return;
+            }
+            enemy.alpha -= 0.1;
+            if (enemy.alpha <= 0) {
+                enemy.destroy();
+                clearInterval(fadeInterval);
+            }
+        }, 50);
     }
 
     private triggerGameOver(): void {
@@ -204,7 +255,7 @@ export class PhysicsComponent extends Component {
         if (this.jumpsRemaining > 0) {
             transform.velocityY = -12;
             this.jumpsRemaining--; 
-            this.isGrounded = false;
+            this.isGrounded = false;            
             return true;
         }
         return false;

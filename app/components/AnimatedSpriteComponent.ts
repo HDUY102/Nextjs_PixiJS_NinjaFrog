@@ -4,12 +4,12 @@ import { PhysicsComponent } from '../game/components/PhysicsComponent';
 import { TransformComponent } from '../game/components/TransformComponent';
 
 // Định nghĩa các loại hành động
-export type AnimationState = 'idle' | 'run' | 'jump' | 'fall';
+export type AnimationState = 'idle' | 'run' | 'jump' | 'fall' | 'hit' | 'double_jump';
 
 export class AnimatedSpriteComponent extends Component {
     public sprite: PIXI.AnimatedSprite;
     private animations: Record<AnimationState, PIXI.Texture[]>;
-    private currentState: AnimationState = 'idle';
+    public currentState: AnimationState = 'idle';
     public autoUpdate: boolean = true;
     public flipWithVelocity: boolean = true;
 
@@ -37,6 +37,12 @@ export class AnimatedSpriteComponent extends Component {
         // Kiểm tra xem animation đó có tồn tại texture không
         if (this.animations[state] && this.animations[state].length > 0) {
             this.sprite.textures = this.animations[state];
+            if (state === 'double_jump') {
+                this.sprite.animationSpeed = 0.4; // Chạy nhanh hơn (xoay tít)
+                this.sprite.loop = true;
+            } else {
+                this.sprite.animationSpeed = 0.2; // Tốc độ bình thường
+            }
             this.sprite.play();
         }
     }
@@ -47,16 +53,22 @@ export class AnimatedSpriteComponent extends Component {
     }
 
     update(delta: number): void {
-        const physics = this.entity.getComponent(PhysicsComponent)as any;
+        if (!this.entity || !this.enabled) return;
+        const physics = this.entity.getComponent(PhysicsComponent);
         const transform = this.entity.requireComponent(TransformComponent);
 
         if (!physics || !transform) return;
-
+        if (this.currentState === 'hit') return;
         // 1. Logic chuyển đổi Animation
         let newState: AnimationState = 'idle';
-        if (physics.velocityY < -0.1) newState = 'jump';
-        else if (physics.velocityY > 0.1 && !physics.isGrounded) newState = 'fall';
-        else if (Math.abs(transform.velocityX) > 0.1) newState = 'run';
+        if (!physics.isGrounded) {
+            if (this.entity.id === 'player' && physics.jumpsRemaining === 0) newState = 'double_jump';
+            else if (transform.velocityY < 0) newState = 'jump';
+            else newState = 'fall';
+        } else {// Đang ở trên mặt đất
+            if (Math.abs(transform.velocityX) > 0.1) newState = 'run';
+            else newState = 'idle';
+        }
 
         if (this.currentState !== newState) {
             this.play(newState);

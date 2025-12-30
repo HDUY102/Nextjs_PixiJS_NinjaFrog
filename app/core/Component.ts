@@ -2,7 +2,7 @@ import { Entity } from './Entity';
 
 export abstract class Component {
     public entity!: Entity;
-
+    public enabled: boolean = true;
     // Mounted to an Entity
     public onAttach(entity: Entity): void {
         this.entity = entity;

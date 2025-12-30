@@ -10,18 +10,21 @@ export class LevelGenerator {
     private fruitFrames: PIXI.Texture[];
     private collectedFrames: PIXI.Texture[];
     private enemyTexture: PIXI.Texture;
+    private hitTexture: PIXI.Texture;
     private TILE_SIZE = 64;
 
     constructor(
         tileTexture: PIXI.Texture, 
         fruitFrames: PIXI.Texture[], 
         collectedFrames: PIXI.Texture[],
-        enemyTexture: PIXI.Texture
+        enemyTexture: PIXI.Texture,
+        hitTexture: PIXI.Texture
     ) {
         this.tileTexture = tileTexture;
         this.fruitFrames = fruitFrames;
         this.collectedFrames = collectedFrames;
         this.enemyTexture = enemyTexture;
+        this.hitTexture = hitTexture;
         
         // Cấu hình Texture để không bị mờ khi phóng to (Pixel Art)
         if (this.tileTexture.baseTexture.scaleMode !== PIXI.SCALE_MODES.NEAREST) {
@@ -60,9 +63,6 @@ export class LevelGenerator {
                     tile.height = this.TILE_SIZE;
 
                     entities.push(tile);
-
-                    // 2. SỬA LỖI PADDING TO (Thu nhỏ hitbox):
-                    // Thay vì lấy full 64px, ta thụt vào mỗi bên 6px
                     const padding = 6; 
                     
                     collidables.push({
@@ -91,7 +91,7 @@ export class LevelGenerator {
                         name: 'fruit'
                     });
                 }else if (tileType === 3) { // Enemy
-                    const enemy = EntityFactory.createEnemy(this.enemyTexture, this.enemyTexture, x, y, gameManager);
+                    const enemy = EntityFactory.createEnemy(this.enemyTexture, this.enemyTexture, this.hitTexture, x, y, gameManager);
                     entities.push(enemy);
                 }
             }

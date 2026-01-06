@@ -6,16 +6,36 @@ import { PhysicsComponent } from './PhysicsComponent';
 export class InputComponent extends Component {
     private keys: { [key: string]: boolean } = {};
     private jumpPressedLastFrame: boolean = false; // Edge Triggering
+    private gameManager: any; // Lưu tham chiếu GameManager
+    private lastFacingDirection: number = 1; // 1: Phải, -1: Trái
 
     constructor() {
         super();
         this.onKeyDown = this.onKeyDown.bind(this);
         this.onKeyUp = this.onKeyUp.bind(this);
-        
+        this.onMouseDown = this.onMouseDown.bind(this);
+
         if (typeof window !== 'undefined') {
             window.addEventListener('keydown', this.onKeyDown);
             window.addEventListener('keyup', this.onKeyUp);
+            window.addEventListener('mousedown', this.onMouseDown);
         }
+    }
+
+    private onMouseDown(e: MouseEvent) {
+        // e.button === 0 là chuột trái
+        if (e.button === 0 && this.entity) {
+            this.shoot();
+        }
+    }
+
+    private shoot() {
+        // Lấy vị trí hiện tại của nhân vật để làm điểm xuất phát
+        const x = this.entity.x;
+        const y = this.entity.y - 35; // Ném ra từ tầm tay/ngực nhân vật
+        
+        // Gọi GameManager để tạo phi tiêu
+        this.gameManager.spawnProjectile(x, y, this.lastFacingDirection);
     }
 
     private onKeyDown(e: KeyboardEvent) { 
@@ -55,6 +75,7 @@ export class InputComponent extends Component {
         if (typeof window !== 'undefined') {
             window.removeEventListener('keydown', this.onKeyDown);
             window.removeEventListener('keyup', this.onKeyUp);
+            window.removeEventListener('mousedown', this.onMouseDown);
         }
     }
 }

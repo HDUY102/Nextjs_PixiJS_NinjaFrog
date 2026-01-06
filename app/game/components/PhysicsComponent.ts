@@ -68,6 +68,9 @@ export class PhysicsComponent extends Component {
         if (this.entity.id === 'player' && this.gameManager) {
             this.handleCollectionCollision();
             this.handleEnemyCollision();
+            if (this.entity.y > 550) { // Check rớt xuống vực
+                this.triggerGameOver();
+            }
         }
 
         // Kiểm tra va chạm với quái vật

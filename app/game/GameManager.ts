@@ -42,7 +42,8 @@ export class GameManager {
             fruitCollected: '/assets/fruit/Collected.png',
             enemySnail: '/assets/enemy/Mushroom/Idle.png',
             enemyRun: '/assets/enemy/Mushroom/Run.png',
-            enemyHit: '/assets/enemy/Mushroom/Hit.png'
+            enemyHit: '/assets/enemy/Mushroom/Hit.png',
+            shuriken: '/assets/items/Shuriken pronta.png',
         };
         
         const loaded = await PIXI.Assets.load(Object.values(assetUrls));

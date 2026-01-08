@@ -35,7 +35,7 @@ export class EntityFactory {
             .addComponent(new TransformComponent())
             .addComponent(new AnimatedSpriteComponent(animations))
             .addComponent(new PhysicsComponent(gameManager, 30, 50))
-            .addComponent(new InputComponent());
+            .addComponent(new InputComponent(gameManager));
 
         // Phóng to nhân vật lên 2 lần
         player.scale.set(2); 

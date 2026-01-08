@@ -5,6 +5,7 @@ import { getFramesFromSpriteSheet } from '../core/Utils';
 import { PhysicsComponent } from './components/PhysicsComponent';
 import { ICollidable } from '../core/Types';
 import { LevelGenerator } from './LevelGenerator'; // Import LevelGenerator
+import { ProjectileComponent } from './components/ProjectileComponent';
 
 export class GameManager {
     private app: PIXI.Application;
@@ -112,6 +113,27 @@ export class GameManager {
         this.collectableItems.push(...data.collectables);
 
         this.updatePlayerPhysicsRef();
+    }
+
+    public spawnProjectile(x: number, y: number, direction: number) {
+        const shuriken = new Entity(`shuriken_${Date.now()}`);
+        
+        // Lấy texture đã load (đảm bảo key 'shuriken' đúng với lúc load)
+        const texture = PIXI.Assets.get('/assets/items/Shuriken pronta.png');
+        if (!texture) return;
+        const sprite = new PIXI.Sprite(texture);
+        sprite.anchor.set(0.5, 0.5);
+        sprite.scale.set(0.02);
+        shuriken.addChild(sprite);
+
+        shuriken.x = x;
+        shuriken.y = y;
+
+        // Thêm component logic bay
+        shuriken.addComponent(new ProjectileComponent(direction));
+
+        // Thêm vào hệ thống
+        this.addEntity(shuriken);
     }
 
     private addEntity(entity: Entity) {

@@ -9,8 +9,9 @@ export class InputComponent extends Component {
     private gameManager: any; // Lưu tham chiếu GameManager
     private lastFacingDirection: number = 1; // 1: Phải, -1: Trái
 
-    constructor() {
+    constructor(gameManager: any) {
         super();
+        this.gameManager = gameManager;
         this.onKeyDown = this.onKeyDown.bind(this);
         this.onKeyUp = this.onKeyUp.bind(this);
         this.onMouseDown = this.onMouseDown.bind(this);
@@ -32,7 +33,7 @@ export class InputComponent extends Component {
     private shoot() {
         // Lấy vị trí hiện tại của nhân vật để làm điểm xuất phát
         const x = this.entity.x;
-        const y = this.entity.y - 35; // Ném ra từ tầm tay/ngực nhân vật
+        const y = this.entity.y - 15; // Ném ra từ tầm tay/ngực nhân vật
         
         // Gọi GameManager để tạo phi tiêu
         this.gameManager.spawnProjectile(x, y, this.lastFacingDirection);

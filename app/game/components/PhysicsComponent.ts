@@ -74,7 +74,7 @@ export class PhysicsComponent extends Component {
         }
 
         // Kiểm tra va chạm với quái vật
-        this.handleEnemyCollision();
+        // this.handleEnemyCollision();
     }
 
     private resetCollisionFlags() {
@@ -186,7 +186,7 @@ export class PhysicsComponent extends Component {
             {
                 const isSteppingOnHead = transform.velocityY > 0 && playerBox.bottom < enemy.y - 10;
                 if (isSteppingOnHead) {
-                    this.killEnemy(enemy);
+                    (this.gameManager as any).killEnemy(enemy);
                     // Cho Player nảy lên một chút sau khi giẫm
                     transform.velocityY = -10; 
                     break; 

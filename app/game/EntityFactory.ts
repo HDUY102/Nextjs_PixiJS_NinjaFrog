@@ -111,7 +111,7 @@ export class EntityFactory {
     }
 
     // Tạo Fruit (Sử dụng logic của Coin)
-    static createFruit(textures: PIXI.Texture[], collectedTextures: PIXI.Texture[], x: number, y: number): Entity {
+    static createFruit(textures: PIXI.Texture[], collectedTextures: PIXI.Texture[], x: number, y: number, gameManager: any): Entity {
         const uniqueId = `fruit_${x}_${y}`;
         const fruit = new Entity(uniqueId);
         fruit.x = x + TILE_SIZE / 2;
@@ -122,7 +122,7 @@ export class EntityFactory {
         animatedSprite.scale.set(1.5); 
         
         fruit.addComponent(new TransformComponent());
-        fruit.addComponent(new FruitComponent(animatedSprite, collectedTextures));
+        fruit.addComponent(new FruitComponent(animatedSprite, collectedTextures, gameManager));
         
         return fruit;
     }

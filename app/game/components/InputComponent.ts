@@ -57,9 +57,11 @@ export class InputComponent extends Component {
 
         if (this.keys['ArrowLeft'] || this.keys['KeyA']) {
             transform.velocityX = -transform.speed;
+            this.lastFacingDirection = -1
         }
         if (this.keys['ArrowRight'] || this.keys['KeyD']) {
             transform.velocityX = transform.speed;
+            this.lastFacingDirection = 1
         }
 
         // Xử lý DOUBLE JUMP: Edge Triggering

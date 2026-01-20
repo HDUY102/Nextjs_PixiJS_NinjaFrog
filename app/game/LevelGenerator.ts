@@ -79,7 +79,7 @@ export class LevelGenerator {
                 } else if (tileType === 2) { // Fruit
                     // Fruit thì căn giữa ô
                     const offset = (this.TILE_SIZE - 48) / 2; // Giả sử fruit size 48
-                    const fruit = EntityFactory.createFruit(this.fruitFrames, this.collectedFrames, x + offset, y + offset);
+                    const fruit = EntityFactory.createFruit(this.fruitFrames, this.collectedFrames, x + offset, y + offset, gameManager);
                     
                     entities.push(fruit);
                     collectables.push({

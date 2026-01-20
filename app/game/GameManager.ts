@@ -6,6 +6,8 @@ import { PhysicsComponent } from './components/PhysicsComponent';
 import { ICollidable } from '../core/Types';
 import { LevelGenerator } from './LevelGenerator'; // Import LevelGenerator
 import { ProjectileComponent } from './components/ProjectileComponent';
+import { TransformComponent } from './components/TransformComponent';
+import { AnimatedSpriteComponent } from '../components/AnimatedSpriteComponent';
 
 export class GameManager {
     private app: PIXI.Application;
@@ -13,6 +15,14 @@ export class GameManager {
     private player: Entity | null = null;
     private enemies: Entity[] = [];
     private GAME_WIDTH: number = 800;
+
+    // --- HỆ THỐNG LAYER (Quan trọng để UI không bị trôi) ---
+    private worldContainer: PIXI.Container; 
+    private uiContainer: PIXI.Container;
+
+    // --- ĐIỂM SỐ ---
+    private score: number = 0;
+    private scoreText!: PIXI.Text;
 
     // --- Quản lý Map ---
     private levelGenerator!: LevelGenerator;
@@ -28,6 +38,40 @@ export class GameManager {
         this.app = app;
         // Bật tính năng sắp xếp lớp (Layer) để Player luôn nổi trên Tiles mới sinh
         this.app.stage.sortableChildren = true;
+
+        // 1. Tạo container cho thế giới game (Sẽ di chuyển theo camera)
+        this.worldContainer = new PIXI.Container();
+        this.app.stage.addChild(this.worldContainer);
+
+        // 2. Tạo container cho UI (Luôn đứng yên trên màn hình)
+        this.uiContainer = new PIXI.Container();
+        this.app.stage.addChild(this.uiContainer);
+
+        this.initUI();
+    }
+
+    private initUI() {
+        const style = new PIXI.TextStyle({
+            fontFamily: 'Arial',
+            fontSize: 26,
+            fontWeight: 'bold',
+            fill: 0xffffff, 
+            stroke: { color: 0x000000, width: 4 },
+            dropShadow: { color: 0x000000, blur: 4, distance: 2 }
+        });
+
+        this.scoreText = new PIXI.Text({ text: 'SCORE: 0', style });
+        this.scoreText.x = 20;
+        this.scoreText.y = 20;
+        this.uiContainer.addChild(this.scoreText);
+    }
+
+    public addScore(points: number) {
+        this.score += points;
+        this.scoreText.text = `SCORE: ${this.score}`;
+        // Hiệu ứng pop nhẹ
+        this.scoreText.scale.set(1.1);
+        setTimeout(() => this.scoreText.scale.set(1), 100);
     }
 
     public async init() {
@@ -130,7 +174,7 @@ export class GameManager {
         shuriken.y = y;
 
         // Thêm component logic bay
-        shuriken.addComponent(new ProjectileComponent(direction));
+        shuriken.addComponent(new ProjectileComponent(direction, this));
 
         // Thêm vào hệ thống
         this.addEntity(shuriken);
@@ -138,7 +182,7 @@ export class GameManager {
 
     private addEntity(entity: Entity) {
         this.entities.push(entity);
-        this.app.stage.addChild(entity);
+        this.worldContainer.addChild(entity);
     }
 
     private update(delta: number) {
@@ -151,7 +195,7 @@ export class GameManager {
             // 1. Logic CAMERA
             let targetStageX = (this.GAME_WIDTH / 2) - this.player.x;
             if (targetStageX > 0) targetStageX = 0; // Chặn biên trái
-            this.app.stage.x = targetStageX;
+            this.worldContainer.x = targetStageX;
 
             // 2. Logic INFINITE MAP (Sinh map mới)
             // Nếu khoảng cách từ Player đến cuối Map < 800px -> Sinh tiếp
@@ -210,6 +254,73 @@ export class GameManager {
         this.collidableTiles = this.collidableTiles.filter(t => t.x >= deleteThreshold);
         this.collectableItems = this.collectableItems.filter(i => i.x >= deleteThreshold);
         this.enemies = this.enemies.filter(e => !e.destroyed);
+    }
+
+    public killEnemy(enemy: Entity): void {
+        if (enemy.destroyed) return;
+
+        this.addScore(2);
+        this.spawnFloatingText(enemy.x, enemy.y - 20, "+2", 0xffaa00);
+
+        const enemyPhysics = enemy.getComponent(PhysicsComponent);
+        if (enemyPhysics) enemyPhysics.enabled = false;
+
+        const enemyTransform = enemy.getComponent(TransformComponent);
+        if (enemyTransform) enemyTransform.velocityX = 0;
+
+        const enemySprite = enemy.getComponent(AnimatedSpriteComponent);
+        if (enemySprite) {
+            enemySprite.sprite.loop = false;
+            enemySprite.play('hit');
+            enemySprite.sprite.onComplete = () => {
+                if (enemySprite.currentState === 'hit') enemy.destroy();
+            };
+        } else {
+            enemy.destroy();
+        }
+
+        // Loại bỏ khỏi danh sách quản lý
+        this.enemies = this.enemies.filter(e => e !== enemy);
+        // Cập nhật lại tham chiếu cho Player
+        this.updatePlayerPhysicsRef();
+    }
+
+    //Tạo hiệu ứng điểm số bay lên 
+    public spawnFloatingText(x: number, y: number, text: string, color: number = 0xffff00) {
+        const style = new PIXI.TextStyle({
+            fontFamily: 'Arial',
+            fontSize: 20,
+            fontWeight: 'bold',
+            fill: color,
+            stroke: { color: 0x000000, width: 3 },
+        });
+
+        const floatingText = new PIXI.Text({ text, style });
+        floatingText.x = x;
+        floatingText.y = y;
+        floatingText.anchor.set(0.5);
+        
+        // Add vào worldContainer để nó trôi theo camera (hoặc uiContainer nếu muốn cố định)
+        this.worldContainer.addChild(floatingText);
+
+        // Hiệu ứng Tween đơn giản bằng Ticker
+        const startTime = Date.now();
+        const duration = 1000; // 1 giây
+
+        const ticker = (t: PIXI.Ticker) => {
+            const elapsed = Date.now() - startTime;
+            const progress = elapsed / duration;
+
+            if (progress >= 1) {
+                this.app.ticker.remove(ticker);
+                floatingText.destroy();
+            } else {
+                floatingText.y -= 1; // Bay lên
+                floatingText.alpha = 1 - progress; // Mờ dần
+            }
+        };
+
+        this.app.ticker.add(ticker);
     }
 
     public findEntityById(id: string): Entity | undefined {

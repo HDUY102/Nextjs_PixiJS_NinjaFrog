@@ -11,6 +11,7 @@ export class LevelGenerator {
     private collectedFrames: PIXI.Texture[];
     private enemyTexture: PIXI.Texture;
     private hitTexture: PIXI.Texture;
+    private specialTileTextures: any;
     private TILE_SIZE = 64;
 
     constructor(
@@ -18,13 +19,15 @@ export class LevelGenerator {
         fruitFrames: PIXI.Texture[], 
         collectedFrames: PIXI.Texture[],
         enemyTexture: PIXI.Texture,
-        hitTexture: PIXI.Texture
+        hitTexture: PIXI.Texture,
+        specialTileTextures: any
     ) {
         this.tileTexture = tileTexture;
         this.fruitFrames = fruitFrames;
         this.collectedFrames = collectedFrames;
         this.enemyTexture = enemyTexture;
         this.hitTexture = hitTexture;
+        this.specialTileTextures = specialTileTextures;
         
         // Cấu hình Texture để không bị mờ khi phóng to (Pixel Art)
         if (this.tileTexture.baseTexture.scaleMode !== PIXI.SCALE_MODES.NEAREST) {
@@ -93,6 +96,21 @@ export class LevelGenerator {
                 }else if (tileType === 3) { // Enemy
                     const enemy = EntityFactory.createEnemy(this.enemyTexture, this.enemyTexture, this.hitTexture, x, y, gameManager);
                     entities.push(enemy);
+                }else if (tileType === 4) { // Tile Special
+                    const specialTile = EntityFactory.createSpecialTile(this.specialTileTextures, x, y);
+                    entities.push(specialTile);
+
+                    // thêm vào collidables để Physics có thể xử lý va chạm
+                    collidables.push({
+                        id: specialTile.id,
+                        x: x,
+                        y: y,
+                        width: this.TILE_SIZE,
+                        height: this.TILE_SIZE,
+                        name: 'special_tile',
+                        type: 4,
+                        isUsed: false   // Trạng thái ban đầu
+                    });
                 }
             }
         }

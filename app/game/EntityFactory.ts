@@ -126,4 +126,24 @@ export class EntityFactory {
         
         return fruit;
     }
+
+    // Special Tile
+    static createSpecialTile(textures: any, x: number, y: number): Entity {
+        const tile = new Entity(`special_tile_${x}_${y}`);
+        tile.x = x;
+        tile.y = y;
+
+        const sprite = PIXI.Sprite.from(textures.idle);
+        sprite.width = 64; // TILE_SIZE
+        sprite.height = 64;
+        tile.addChild(sprite);
+
+        // Lưu dữ liệu vào userData mà chúng ta vừa thêm vào class Entity
+        tile.userData = {
+            hitTexture: textures.hit,
+            breakTexture: textures.break,
+            isUsed: false
+        };
+        return tile;
+    }
 }

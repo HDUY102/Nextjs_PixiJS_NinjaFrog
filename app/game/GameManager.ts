@@ -24,6 +24,9 @@ export class GameManager {
     private score: number = 0;
     private scoreText!: PIXI.Text;
 
+    // --- COINS ---
+    private coinFrames: PIXI.Texture[] = [];
+
     // --- Quản lý Map ---
     private levelGenerator!: LevelGenerator;
     private lastChunkEndX: number = 0; // Vị trí pixel kết thúc của chunk cuối cùng
@@ -82,6 +85,9 @@ export class GameManager {
             fall: '/assets/ninja_frog/Fall (32x32).png',
             double_jump: '/assets/ninja_frog/Double Jump (32x32).png',
             tile: '/assets/tile/Idle.png',
+            tile_special: '/assets/tile/IdleSpecial.png',
+            tile_hit: '/assets/tile/Hit.png',
+            tile_break: '/assets/tile/Break.png',
             playerHit: '/assets/ninja_frog/Hit (32x32).png',
             fruitStrip: '/assets/fruit/Apple.png',
             fruitCollected: '/assets/fruit/Collected.png',
@@ -89,6 +95,7 @@ export class GameManager {
             enemyRun: '/assets/enemy/Mushroom/Run.png',
             enemyHit: '/assets/enemy/Mushroom/Hit.png',
             shuriken: '/assets/items/Shuriken pronta.png',
+            spinningCoin: '/assets/items/spinning coin.png',
         };
         
         const loaded = await PIXI.Assets.load(Object.values(assetUrls));
@@ -102,9 +109,17 @@ export class GameManager {
         const fruitFrames = getFramesFromSpriteSheet(loaded[assetUrls.fruitStrip], 32, 32, 6);
         const collectedFrames = getFramesFromSpriteSheet(loaded[assetUrls.fruitCollected], 32, 32, 6);
         const tileTexture = loaded[assetUrls.tile];
+        
+        // Coin
+        this.coinFrames = getFramesFromSpriteSheet(loaded[assetUrls.spinningCoin], 32, 32, 6);
+        const specialTileTextures = {
+            idle: loaded[assetUrls.tile_special],
+            hit: loaded[assetUrls.tile_hit],
+            break: loaded[assetUrls.tile_break]
+        };
 
         // 1. Khởi tạo LevelGenerator
-        this.levelGenerator = new LevelGenerator(tileTexture, fruitFrames, collectedFrames, loaded[assetUrls.enemySnail],loaded[assetUrls.enemyHit]);
+        this.levelGenerator = new LevelGenerator(tileTexture, fruitFrames, collectedFrames, loaded[assetUrls.enemySnail],loaded[assetUrls.enemyHit], specialTileTextures);
 
         // 2. Sinh Map khởi đầu (Buffer 3-4 chunks để lấp đầy màn hình lúc đầu)
         // Reset điểm bắt đầu về 0
@@ -195,7 +210,22 @@ export class GameManager {
             // 1. Logic CAMERA
             let targetStageX = (this.GAME_WIDTH / 2) - this.player.x;
             if (targetStageX > 0) targetStageX = 0; // Chặn biên trái
+            
+            // Chặn Camera không cho đi lùi (Camera chỉ tiến, không lùi)
+            if (targetStageX > this.worldContainer.x) {
+                targetStageX = this.worldContainer.x;
+            }
             this.worldContainer.x = targetStageX;
+
+            const currentScreenLeft = Math.abs(this.worldContainer.x);
+
+            this.entities.forEach(entity => {
+                const physics = entity.getComponent(PhysicsComponent);
+                if (physics) {
+                    // Ép biên trái màn hình vào Physics
+                    physics.minX = currentScreenLeft;
+                }
+            });
 
             // 2. Logic INFINITE MAP (Sinh map mới)
             // Nếu khoảng cách từ Player đến cuối Map < 800px -> Sinh tiếp
@@ -234,19 +264,28 @@ export class GameManager {
      */
     private cleanupOldChunks() {
         if (!this.player) return;
-        
-        // Tính mốc tọa độ cần xóa (Ví dụ: Player ở 2000, xóa tất cả cái gì < 800)
-        const deleteThreshold = this.player.x - this.DELETE_DISTANCE_THRESHOLD;
 
+        const viewLeftEdge = Math.abs(this.worldContainer.x);        
+        // Tính mốc tọa độ cần xóa (Ví dụ: Player ở 2000, xóa tất cả cái gì < viewLeftEdge)
+        const deleteThreshold = viewLeftEdge - 200;
+        // Đối với Enemy: Xóa ngay khi chúng vừa ra khỏi màn hình (giả sử 50px)
+        const enemyDeleteThreshold = viewLeftEdge - 50;
+        
         // 1. Destroy Entity PIXI (Xóa khỏi màn hình)
         this.entities.forEach(e => {
             // Phải kiểm tra xem entity có bị destroy trước đó chưa (ví dụ do bị ăn mất)
             // Nếu e.destroyed = true thì thuộc tính .x của PIXI không còn tồn tại -> gây crash
-            if (!e || e.destroyed) return; 
+            if (!e || e.destroyed || e.id === 'player') return; 
 
-            // Sau khi đảm bảo nó còn sống, mới kiểm tra vị trí
-            if (e.id !== 'player' && e.x < deleteThreshold) {
-                e.destroy(); 
+            // Nếu là quái vật, xóa sớm hơn
+            if (e.id.startsWith('enemy_')) {
+                if (e.x < enemyDeleteThreshold) {
+                    e.destroy();
+                }
+            } 
+            // Nếu là gạch hoặc item, xóa trễ hơn một chút cho mượt
+            else if (e.x < deleteThreshold) {
+                e.destroy();
             }
         });
 
@@ -321,6 +360,88 @@ export class GameManager {
         };
 
         this.app.ticker.add(ticker);
+    }
+
+    public spawnCoin(x: number, y: number) {
+        if (this.coinFrames.length === 0) return;
+
+        const coin = new PIXI.AnimatedSprite(this.coinFrames);
+        coin.anchor.set(0.5);
+        
+        // Tâm của viên gạch 64x64 là x+32, y+32
+        coin.x = x + 32;
+        coin.y = y + 32;
+
+        // Phóng to đồng xu lên một chút (ví dụ 40px) để nhìn rõ hơn Pixel Art
+        coin.width = 40; 
+        coin.height = 40;
+
+        coin.animationSpeed = 0.2;
+        coin.play();
+        coin.zIndex = 50; 
+        this.worldContainer.addChild(coin);
+
+        // Lực nảy lên: cho vận tốc âm để bay lên trên
+        let velocityY = -10; 
+        const gravity = 0.6;
+
+        const animate = (ticker: PIXI.Ticker) => {
+            velocityY += gravity;
+            coin.y += velocityY;
+            
+            // Khi bắt đầu rơi xuống (velocityY > 0) thì làm mờ dần
+            if (velocityY > 2) {
+                coin.alpha -= 0.1;
+            }
+
+            if (coin.alpha <= 0 || coin.y > y + 100) {
+                this.app.ticker.remove(animate);
+                coin.destroy();
+                this.addScore(10);
+            }
+        };
+        this.app.ticker.add(animate);
+    }
+
+    public breakTile(tileEntity: Entity) {
+        if (!tileEntity || tileEntity.destroyed) return;
+
+        const x = tileEntity.x;
+        const y = tileEntity.y;
+        // Lấy sprite và texture hiện tại TRƯỚC khi xóa gạch
+        const sprite = tileEntity.children[0] as PIXI.Sprite;
+        const currentTexture = sprite.texture;
+
+        // 1. Sinh 4 mảnh vỡ (Dùng texture của gạch vừa đụng)
+        const directions = [
+            { vx: -5, vy: -12 }, { vx: 5, vy: -12 },
+            { vx: -3, vy: -8 },  { vx: 3, vy: -8 }
+        ];
+
+        directions.forEach(dir => {
+            const piece = new PIXI.Sprite(currentTexture);
+            piece.width = 32; piece.height = 32;
+            piece.x = x + 16; piece.y = y + 16;
+            piece.anchor.set(0.5);
+            this.worldContainer.addChild(piece);
+
+            let vX = dir.vx; let vY = dir.vy;
+            const gravity = 0.5;
+            const animatePiece = (ticker: PIXI.Ticker) => {
+                vY += gravity; piece.x += vX; piece.y += vY; piece.rotation += 0.2;
+                if (piece.y > 800) {
+                    this.app.ticker.remove(animatePiece);
+                    piece.destroy();
+                }
+            };
+            this.app.ticker.add(animatePiece);
+        });
+
+        // 2. Sinh đồng xu bay lên
+        this.spawnCoin(x + 32, y);
+
+        // 3. XÓA GẠCH GỐC (Lệnh này kết liễu thực thể gạch)
+        tileEntity.destroy();
     }
 
     public findEntityById(id: string): Entity | undefined {

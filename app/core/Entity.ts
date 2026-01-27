@@ -4,6 +4,7 @@ import { Constructor } from './Types';
 
 export class Entity extends PIXI.Container {
     public id: string;
+    public userData: any = {};
     // Map save components by Class Constructor
     private components: Map<Function, Component> = new Map();
 

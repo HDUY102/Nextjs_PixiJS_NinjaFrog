@@ -8,4 +8,6 @@ export interface ICollidable {
     width: number;
     height: number;
     name: string;
+    type?: number;
+    isUsed?: boolean;
 }

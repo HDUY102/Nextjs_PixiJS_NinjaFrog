@@ -26,6 +26,7 @@ export class PhysicsComponent extends Component {
     public collisionFlags = { left: false, right: false, top: false, bottom: false };
     public width: number;
     public height: number;
+    public minX: number = 0;
     public enemies: Entity[] = [];
 
     constructor(gameManager: IGameManager, width: number = 38, height: number = 60) {
@@ -56,13 +57,35 @@ export class PhysicsComponent extends Component {
         this.entity.x += transform.velocityX * safeDelta;
         
         // Chặn biên trái màn hình (Chỉ dành cho Player)
-        if (this.entity.id === 'player') {
-            if (this.entity.x < this.width / 2) {
-                this.entity.x = this.width / 2;
+        const halfW = this.width / 2;
+        if (this.entity.x - halfW < this.minX) {
+            this.entity.x = this.minX + halfW; // Chặn đứng tại chỗ
+            
+            // Nếu là Player: Dừng vận tốc
+            if (this.entity.id === 'player') {
                 transform.velocityX = 0;
             }
+            
+            // Gắn cờ va chạm trái để Quái vật biết mà quay đầu
+            this.collisionFlags.left = true; 
         }
         this.handleHorizontalCollision(transform);
+
+        // Nếu là Enemy mà vừa chạm biên trái (left) vừa chạm tường (right)
+        if (this.entity.id.startsWith('enemy_')) {
+            if (this.collisionFlags.left && this.collisionFlags.right) {
+                // Quái vật bị ép chết
+                this.entity.destroy();
+                return;
+            }
+
+            // Tối ưu: Nếu quái vật đã bị trôi hẳn ra khỏi màn hình bên trái
+            // (Tâm của nó cách biên trái hơn 100px)
+            if (this.entity.x < this.minX - 50) {
+                this.entity.destroy();
+                return;
+            }
+        }
 
         // 4. Logic riêng: Player nhặt đồ, va chạm quái
         if (this.entity.id === 'player' && this.gameManager) {
@@ -72,9 +95,6 @@ export class PhysicsComponent extends Component {
                 this.triggerGameOver();
             }
         }
-
-        // Kiểm tra va chạm với quái vật
-        // this.handleEnemyCollision();
     }
 
     private resetCollisionFlags() {
@@ -115,6 +135,11 @@ export class PhysicsComponent extends Component {
                 // Nhảy lên (Đụng đầu)
                 else if (transform.velocityY < 0) {
                      if (box.top <= tile.y + TILE_SIZE && box.top >= tile.y + TILE_SIZE - 20) {
+                        // Kiểm tra nếu đây là gạch đặc biệt
+                        if (tile.type === 4) {
+                            this.triggerSpecialTile(tile); // Gọi hàm xử lý
+                        }
+                        
                         this.entity.y = tile.y + TILE_SIZE + this.height; // Đẩy xuống
                         transform.velocityY = 0;
                         this.collisionFlags.top = true;
@@ -173,6 +198,7 @@ export class PhysicsComponent extends Component {
 
         const playerBox = this.getHitbox();
         const transform = this.entity.requireComponent(TransformComponent);
+        let hasKilledThisFrame = false; // Flag đánh dấu đã giết quái trong frame
         for (const enemy of this.enemies) {
             if (enemy.destroyed) continue;
 
@@ -184,63 +210,41 @@ export class PhysicsComponent extends Component {
             if (playerBox.right > enemy.x - enemyHalfW && playerBox.left < enemy.x + enemyHalfW &&
                 playerBox.bottom > enemyTop && playerBox.top < enemy.y) 
             {
-                const isSteppingOnHead = transform.velocityY > 0 && playerBox.bottom < enemy.y - 10;
-                if (isSteppingOnHead) {
+                const isFalling = transform.velocityY > 0;
+                const isAbove = playerBox.bottom < enemy.y - 15;
+                if (isFalling || isAbove) {
                     (this.gameManager as any).killEnemy(enemy);
-                    // Cho Player nảy lên một chút sau khi giẫm
-                    transform.velocityY = -10; 
-                    break; 
-                } else {
-                    // Nếu va chạm ngang hoặc Player đang nhảy lên đụng Enemy -> Game Over
+                    hasKilledThisFrame = true;
+                    // Nảy lên
+                    transform.velocityY = -12; 
+                } else if (!hasKilledThisFrame) {
                     this.triggerGameOver();
-                    break;
+                    return; 
                 }
             }
         }
     }
 
-    private killEnemy(enemy: Entity): void {
-        // 1. Ngắt ngay lập tức khả năng gây sát thương và di chuyển
-        const enemyPhysics = enemy.getComponent(PhysicsComponent);
-        if (enemyPhysics) {
-            enemyPhysics.enabled = false; // Ngừng chạy update của chính nó
+    private triggerSpecialTile(tileData: any) {
+        const tileEntity = this.gameManager.findEntityById(tileData.id);
+        if (!tileEntity || tileEntity.userData.isUsed) return;
+
+        tileData.isUsed = true;
+        tileEntity.userData.isUsed = true;
+
+        // 2. XÓA TRỰC TIẾP KHỎI MẢNG (In-place Mutation)
+        const index = this.collidableTiles.findIndex(t => t.id === tileData.id);
+        if (index !== -1) {
+            this.collidableTiles.splice(index, 1);
         }
 
-        // 2. Dừng di chuyển của quái
-        const enemyTransform = enemy.getComponent(TransformComponent);
-        if (enemyTransform) enemyTransform.velocityX = 0;
-
-        // 3. Chạy animation 'hit'
-        const enemySprite = enemy.getComponent(AnimatedSpriteComponent);
-        if (enemySprite) {
-            enemySprite.sprite.loop = false; // Chỉ chạy 1 lần rồi biến mất
-            enemySprite.play('hit');
-            // Lắng nghe sự kiện kết thúc animation hit để xóa quái
-            enemySprite.sprite.onComplete = () => {
-                // Kiểm tra currentState (giờ đã là public)
-                if (enemySprite.currentState === 'hit' && !enemy.destroyed) {
-                    enemy.destroy();
-                }
-            };
-        }else {
-            enemy.destroy();
+        // 3. ĐỒNG BỘ NGAY LẬP TỨC CHO PLAYER
+        if ((this.gameManager as any).updatePlayerPhysicsRef) {
+            (this.gameManager as any).updatePlayerPhysicsRef();
         }
 
-        // 4. Loại bỏ khỏi danh sách enemies ngay lập tức để không gây sát thương nữa
-        this.enemies = this.enemies.filter(e => e !== enemy);
-        
-        // 5. (Tùy chọn) Thêm hiệu ứng mờ dần
-        const fadeInterval = setInterval(() => {
-            if (enemy.destroyed) {
-                clearInterval(fadeInterval);
-                return;
-            }
-            enemy.alpha -= 0.1;
-            if (enemy.alpha <= 0) {
-                enemy.destroy();
-                clearInterval(fadeInterval);
-            }
-        }, 50);
+        // 4. HIỆU ỨNG VÀ HỦY ENTITY
+        (this.gameManager as any).breakTile(tileEntity);
     }
 
     private triggerGameOver(): void {

@@ -1,4 +1,3 @@
-// app/game/LevelGenerator.ts
 import * as PIXI from 'pixi.js';
 import { EntityFactory } from './EntityFactory';
 import { Entity } from '../core/Entity';

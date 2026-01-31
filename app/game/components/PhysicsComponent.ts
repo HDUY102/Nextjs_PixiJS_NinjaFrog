@@ -4,7 +4,6 @@ import { TransformComponent } from './TransformComponent';
 import { FruitComponent } from './FruitComponent';
 import { Entity } from '@/app/core/Entity';
 import * as PIXI from 'pixi.js';
-import { AnimatedSpriteComponent } from '@/app/components/AnimatedSpriteComponent';
 
 interface IGameManager {
     findEntityById(id: string): Entity | undefined;

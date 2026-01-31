@@ -8,6 +8,7 @@ export class InputComponent extends Component {
     private jumpPressedLastFrame: boolean = false; // Edge Triggering
     private gameManager: any; // Lưu tham chiếu GameManager
     private lastFacingDirection: number = 1; // 1: Phải, -1: Trái
+    private shootPressedLastFrame: boolean = false; // Thêm để tránh spam đạn khi giữ nút Mobile
 
     constructor(gameManager: any) {
         super();
@@ -53,25 +54,34 @@ export class InputComponent extends Component {
         const transform = this.entity.requireComponent(TransformComponent);
         const physics = this.entity.getComponent(PhysicsComponent);
 
+        // Lấy trạng thái từ Mobile Controls thông qua GameManager
+        const mobile = this.gameManager.getMobileInput();
+
         transform.velocityX = 0;
 
-        if (this.keys['ArrowLeft'] || this.keys['KeyA']) {
+        if (this.keys['ArrowLeft'] || this.keys['KeyA'] || mobile.left) {
             transform.velocityX = -transform.speed;
             this.lastFacingDirection = -1
         }
-        if (this.keys['ArrowRight'] || this.keys['KeyD']) {
+        if (this.keys['ArrowRight'] || this.keys['KeyD'] || mobile.right) {
             transform.velocityX = transform.speed;
             this.lastFacingDirection = 1
         }
 
         // Xử lý DOUBLE JUMP: Edge Triggering
-        const isJumpKeyHeld = this.keys['ArrowUp'] || this.keys['Space'];
+        const isJumpKeyHeld = this.keys['ArrowUp'] || this.keys['Space'] || mobile.jump;
 
         if (isJumpKeyHeld && !this.jumpPressedLastFrame && physics) {
             physics.jump();
         }
 
         this.jumpPressedLastFrame = isJumpKeyHeld;
+
+        // --- Logic Bắn (Mobile) ---
+        if (mobile.shoot && !this.shootPressedLastFrame) {
+            this.shoot();
+        }
+        this.shootPressedLastFrame = mobile.shoot;
     }
 
     destroy(): void {

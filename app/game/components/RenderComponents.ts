@@ -1,4 +1,3 @@
-// game/components/RenderComponent.ts
 import * as PIXI from 'pixi.js';
 import { Component } from '../../core/Component';
 

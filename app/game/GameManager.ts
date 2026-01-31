@@ -4,13 +4,14 @@ import { EntityFactory } from './EntityFactory';
 import { getFramesFromSpriteSheet } from '../core/Utils';
 import { PhysicsComponent } from './components/PhysicsComponent';
 import { ICollidable } from '../core/Types';
-import { LevelGenerator } from './LevelGenerator'; // Import LevelGenerator
+import { LevelGenerator } from './LevelGenerator';
 import { ProjectileComponent } from './components/ProjectileComponent';
 import { TransformComponent } from './components/TransformComponent';
 import { AnimatedSpriteComponent } from '../components/AnimatedSpriteComponent';
 import { LevelManager } from './components/level/LevelManager';
 import { LevelConfig, LEVELS } from './components/level/LevelConfig';
 import { ProgressBar } from './ui/ProgressBar';
+import { MobileControls } from './ui/MobileControls';
 
 export class GameManager {
     private app: PIXI.Application;
@@ -18,6 +19,9 @@ export class GameManager {
     private player: Entity | null = null;
     private enemies: Entity[] = [];
     private GAME_WIDTH: number = 800;
+
+    // --- Platform Mobile ---
+    private mobileControls!: MobileControls;
 
     // --- HỆ THỐNG LAYER (Quan trọng để UI không bị trôi) ---
     private worldContainer: PIXI.Container; 
@@ -153,7 +157,23 @@ export class GameManager {
             hit: loaded[assetUrls.tile_hit],
             break: loaded[assetUrls.tile_break]
         };
-
+        
+        // --- Platform: Mobile ---
+        // 1. Khởi tạo Mobile Controls
+        this.mobileControls = new MobileControls(this.app);
+        
+        // 2. Add vào uiContainer để nó LUÔN NỔI TRÊN CÙNG và không bị trôi khi camera chạy
+        this.uiContainer.addChild(this.mobileControls.container);
+        // Tăng zIndex của UI container lên cao nhất
+        this.uiContainer.zIndex = 999; 
+        this.app.stage.sortChildren();
+        
+        // 3. Ẩn/Hiện controls dựa trên thiết bị (Optional)
+        // Nếu muốn chỉ hiện trên mobile:
+        const isMobile = /Mobi|Android/i.test(navigator.userAgent);
+        this.mobileControls.container.visible = isMobile;
+        
+        // --- Platform: Computer ---
         // 1. Khởi tạo LevelGenerator
         this.levelGenerator = new LevelGenerator(tileTexture, fruitFrames, collectedFrames, loaded[assetUrls.enemySnail],loaded[assetUrls.enemyHit], specialTileTextures);
 
@@ -482,6 +502,13 @@ export class GameManager {
 
         // 3. XÓA GẠCH GỐC (Lệnh này kết liễu thực thể gạch)
         tileEntity.destroy();
+    }
+
+    public getMobileInput() {
+        if (this.mobileControls) {
+            return this.mobileControls.input;
+        }
+        return { left: false, right: false, jump: false, shoot: false };
     }
 
     public findEntityById(id: string): Entity | undefined {

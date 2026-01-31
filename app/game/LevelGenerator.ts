@@ -35,7 +35,7 @@ export class LevelGenerator {
         }
     }
 
-    public generateNextChunk(startX: number, gameManager: any): { 
+    public generateNextChunk(startX: number, gameManager: any, modifier: number = 1.0): { 
         entities: Entity[], 
         collidables: ICollidable[], 
         collectables: ICollidable[],
@@ -51,7 +51,14 @@ export class LevelGenerator {
 
         for (let row = 0; row < rows; row++) {
             for (let col = 0; col < cols; col++) {
-                const tileType = chunk[row][col];
+                let tileType = chunk[row][col];
+
+                // --- LOGIC ĐỘ KHÓ LEVEL ---
+                if (tileType === 0 && row === rows - 2) { // Chỉ spawn enemy ở gần mặt đất
+                    if (Math.random() < 0.02 * modifier) {
+                        tileType = 3; // Biến thành Enemy
+                    }
+                }
                 
                 // Tọa độ vẽ (Visual)
                 const x = startX + (col * this.TILE_SIZE);

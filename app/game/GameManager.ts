@@ -8,6 +8,9 @@ import { LevelGenerator } from './LevelGenerator'; // Import LevelGenerator
 import { ProjectileComponent } from './components/ProjectileComponent';
 import { TransformComponent } from './components/TransformComponent';
 import { AnimatedSpriteComponent } from '../components/AnimatedSpriteComponent';
+import { LevelManager } from './components/level/LevelManager';
+import { LevelConfig, LEVELS } from './components/level/LevelConfig';
+import { ProgressBar } from './ui/ProgressBar';
 
 export class GameManager {
     private app: PIXI.Application;
@@ -20,9 +23,12 @@ export class GameManager {
     private worldContainer: PIXI.Container; 
     private uiContainer: PIXI.Container;
 
-    // --- ĐIỂM SỐ ---
+    // --- ĐIỂM SỐ & Level ---
     private score: number = 0;
     private scoreText!: PIXI.Text;
+    private levelManager: LevelManager; 
+    public gameSpeed: number = 5;
+    private levelProgressBar!: ProgressBar;
 
     // --- COINS ---
     private coinFrames: PIXI.Texture[] = [];
@@ -50,6 +56,12 @@ export class GameManager {
         this.uiContainer = new PIXI.Container();
         this.app.stage.addChild(this.uiContainer);
 
+        this.levelManager = new LevelManager(app); // khởi tạo level
+        this.levelManager.onLevelUp = (config: LevelConfig) => {
+            this.gameSpeed = config.moveSpeed; // Cập nhật tốc độ game
+            console.log(`Game Updated: Speed ${this.gameSpeed}, SpawnRate ${config.spawnRate}`);
+        };
+
         this.initUI();
     }
 
@@ -67,11 +79,35 @@ export class GameManager {
         this.scoreText.x = 20;
         this.scoreText.y = 20;
         this.uiContainer.addChild(this.scoreText);
+        this.levelProgressBar = new ProgressBar(this.uiContainer, 20, 60);
     }
 
     public addScore(points: number) {
         this.score += points;
         this.scoreText.text = `SCORE: ${this.score}`;
+        //1. Tính tỉ lệ Progress
+        const currentConfig = this.levelManager.getCurrentConfig();
+        const currentLevelNumber = currentConfig.level;
+        
+        // 2. Tìm cấu hình của level tiếp theo trong mảng LEVELS
+        const nextLevelConfig = LEVELS.find(l => l.level === currentLevelNumber + 1);
+
+        if (nextLevelConfig) {
+            // Mốc bắt đầu của level hiện tại
+            const startScore = currentConfig.targetScore; 
+            // Mốc để lên level tiếp theo
+            const endScore = nextLevelConfig.targetScore;
+
+            // Tính toán tỉ lệ thực tế:
+            // Nếu Score=150, Start=100, End=300 -> Ratio = (150-100) / (300-100) = 0.25 (25%)
+            const ratio = (this.score - startScore) / (endScore - startScore);
+            
+            this.levelProgressBar.update(ratio);
+        } else {
+            // Nếu không còn level kế tiếp (Max Level)
+            this.levelProgressBar.update(1);
+        }
+        this.levelManager.checkLevelUp(this.score);
         // Hiệu ứng pop nhẹ
         this.scoreText.scale.set(1.1);
         setTimeout(() => this.scoreText.scale.set(1), 100);
@@ -111,7 +147,7 @@ export class GameManager {
         const tileTexture = loaded[assetUrls.tile];
         
         // Coin
-        this.coinFrames = getFramesFromSpriteSheet(loaded[assetUrls.spinningCoin], 32, 32, 6);
+        this.coinFrames = getFramesFromSpriteSheet(loaded[assetUrls.spinningCoin], 124 / 6, 20, 6);
         const specialTileTextures = {
             idle: loaded[assetUrls.tile_special],
             hit: loaded[assetUrls.tile_hit],
@@ -140,6 +176,9 @@ export class GameManager {
         this.app.ticker.add((ticker) => {
             this.update(ticker.deltaTime);
         });
+
+        // Set màu nền ban đầu theo Level 1
+        this.app.renderer.background.color = this.levelManager.getCurrentConfig().backgroundColor;
     }
 
     /**
@@ -148,8 +187,10 @@ export class GameManager {
     private spawnChunk() {
         if (!this.levelGenerator) return;
 
+        const currentModifier = this.levelManager.getCurrentConfig().spawnRate; //Lấy spawnRate từ LevelManager truyền vào Generator
+
         // Gọi generator để tạo data tại vị trí cuối cùng
-        const data = this.levelGenerator.generateNextChunk(this.lastChunkEndX, this);
+        const data = this.levelGenerator.generateNextChunk(this.lastChunkEndX, this, currentModifier);
         
         // Cập nhật vị trí cuối mới
         this.lastChunkEndX = data.nextStartX;
@@ -170,7 +211,6 @@ export class GameManager {
         // Cập nhật danh sách va chạm
         this.collidableTiles.push(...data.collidables);
         this.collectableItems.push(...data.collectables);
-
         this.updatePlayerPhysicsRef();
     }
 
@@ -369,10 +409,10 @@ export class GameManager {
         coin.anchor.set(0.5);
         
         // Tâm của viên gạch 64x64 là x+32, y+32
-        coin.x = x + 32;
+        coin.x = x;
         coin.y = y + 32;
 
-        // Phóng to đồng xu lên một chút (ví dụ 40px) để nhìn rõ hơn Pixel Art
+        // Phóng to đồng xu lên để nhìn rõ hơn Pixel Art
         coin.width = 40; 
         coin.height = 40;
 
@@ -385,7 +425,7 @@ export class GameManager {
         let velocityY = -10; 
         const gravity = 0.6;
 
-        const animate = (ticker: PIXI.Ticker) => {
+        const animate = () => {
             velocityY += gravity;
             coin.y += velocityY;
             

@@ -72,7 +72,7 @@ export class LevelGenerator {
                     tile.height = this.TILE_SIZE;
 
                     entities.push(tile);
-                    const padding = 6; 
+                    const padding = 0; 
                     
                     collidables.push({
                         id: tile.id, 

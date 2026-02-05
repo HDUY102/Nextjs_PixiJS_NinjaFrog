@@ -1,4 +1,5 @@
 'use client'
+import { MousePointerClick } from 'lucide-react';
 import GameCanvas from './components/GameCanvas';
 
 export default function Home() {
@@ -29,6 +30,13 @@ export default function Home() {
           <div className="flex items-center space-x-2">
             <kbd className="px-2 py-1 bg-gray-700 rounded border border-gray-600">Space</kbd>
             <span>Nhảy</span>
+          </div>
+          <div className="flex items-center space-x-2">
+            <kbd className="px-2 py-1 bg-gray-700 rounded border border-gray-600 flex items-center gap-1">
+              <MousePointerClick size={14} />
+              Left
+            </kbd>
+            <span>Bắn</span>
           </div>
         </div>
         <p className="mt-4 text-gray-400 italic text-xs">
